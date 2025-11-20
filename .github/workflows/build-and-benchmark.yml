@@ -127,19 +127,8 @@ jobs:
     - name: Generate reports
       run: python analysis/generate_report.py results/
 
-    - name: Download Windows binary
-      uses: actions/download-artifact@v4
-      with:
-        name: windows-latest-binary
-        path: results/bin/windows
-
-    - name: Copy Linux binary
-      run: |
-        mkdir -p results/bin/linux
-        cp ./bin/benchmark results/bin/linux/
-
     - name: Create archive
-      run: zip -r benchmarking-results.zip results/
+      run: cd results && zip -r ../benchmarking-results.zip .
 
     - name: Upload benchmark results
       uses: actions/upload-artifact@v4

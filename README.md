@@ -14,8 +14,8 @@ Projet d'évaluation et comparaison des performances d'algorithmes de recherche 
 - **BFS** (Breadth-First Search)
 - **DFS** (Depth-First Search)
 - **ID** (Iterative Deepening)
-- **A*** (A-Star)
-- **IDA*** (Iterative Deepening A-Star)
+- **A\*** (A-Star)
+- **IDA\*** (Iterative Deepening A-Star)
 
 ## 🧩 Problèmes Types
 

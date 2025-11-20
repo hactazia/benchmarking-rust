@@ -134,7 +134,9 @@ jobs:
         path: results/bin/windows
 
     - name: Copy Linux binary
-      run: cp ./bin/benchmark results/bin/linux/
+      run: |
+        mkdir -p results/bin/linux
+        cp ./bin/benchmark results/bin/linux/
 
     - name: Create archive
       run: zip -r benchmarking-results.zip results/

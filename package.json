@@ -1,0 +1,47 @@
+{
+  "name": "benchmarking-rust",
+  "version": "0.1.0",
+  "description": "Benchmarking d'algorithmes de recherche (BFS, DFS, ID, A*, IDA*) avec analyse comparative",
+  "main": "index.js",
+  "scripts": {
+    "build": "cargo build --release",
+    "benchmark": "cargo run --release",
+    "benchmark:taquin3": "cargo run --release -- --problem taquin --size 3 --iterations 20 --output results/taquin_3x3.json",
+    "benchmark:taquin4": "cargo run --release -- --problem taquin --size 4 --iterations 5 --output results/taquin_4x4.json",
+    "benchmark:taquin5": "cargo run --release -- --problem taquin --size 5 --iterations 3 --output results/taquin_5x5.json",
+    "benchmark:shortest-path": "cargo run --release -- --problem shortest-path --size 10 --iterations 10 --output results/shortest_path.json",
+    "benchmark:all": "powershell -File run_benchmarks.ps1",
+    "analyze": "python analysis/visualize.py",
+    "report": "python analysis/generate_report.py",
+    "merge": "python analysis/merge_results.py",
+    "analyze:all": "npm run analyze && npm run report",
+    "test": "cargo test",
+    "clean": "cargo clean && rimraf results/*.json results/plots/*.png"
+  },
+  "keywords": [
+    "algorithms",
+    "search",
+    "benchmarking",
+    "rust",
+    "bfs",
+    "dfs",
+    "astar",
+    "idastar",
+    "sliding-puzzle",
+    "taquin",
+    "pathfinding"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "rimraf": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": ""
+  }
+}

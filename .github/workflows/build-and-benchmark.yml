@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-test:
+  build:
     strategy:
       matrix:
         os: [windows-latest, ubuntu-latest]
@@ -16,11 +16,9 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact_name: benchmark.exe
-            archive_name: benchmarking-rust-windows-x64.zip
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             artifact_name: benchmark
-            archive_name: benchmarking-rust-linux-x64.zip
 
     runs-on: ${{ matrix.os }}
 
@@ -52,6 +50,30 @@ jobs:
     - name: Run tests
       run: cargo test --release --target ${{ matrix.target }}
 
+    - name: Upload binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ matrix.os }}-binary
+        path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+        retention-days: 30
+
+  benchmark:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download Linux binary
+      uses: actions/download-artifact@v4
+      with:
+        name: ubuntu-latest-binary
+        path: ./bin
+
+    - name: Make binary executable
+      run: chmod +x ./bin/benchmark
+
     - name: Setup Python
       uses: actions/setup-python@v5
       with:
@@ -69,28 +91,28 @@ jobs:
       run: pip install -r requirements.txt
 
     - name: Run benchmarks - Taquin 3x3
-      run: cargo run --release --target ${{ matrix.target }} -- --problem taquin --size 3 --iterations 20 --output results/taquin_3x3.json
+      run: ./bin/benchmark --problem taquin --size 3 --iterations 20 --output results/taquin_3x3.json
 
     - name: Run benchmarks - Taquin 4x4
-      run: cargo run --release --target ${{ matrix.target }} -- --problem taquin --size 4 --iterations 5 --output results/taquin_4x4.json
+      run: ./bin/benchmark --problem taquin --size 4 --iterations 5 --output results/taquin_4x4.json
 
     - name: Run benchmarks - Shortest Path 10x10
-      run: cargo run --release --target ${{ matrix.target }} -- --problem shortest-path --size 10 --iterations 10 --output results/shortest_path_10.json
+      run: ./bin/benchmark --problem shortest-path --size 10 --iterations 10 --output results/shortest_path_10.json
 
     - name: Run benchmarks - Shortest Path 100x100
-      run: cargo run --release --target ${{ matrix.target }} -- --problem shortest-path --size 100 --iterations 10 --output results/shortest_path_100.json
+      run: ./bin/benchmark --problem shortest-path --size 100 --iterations 10 --output results/shortest_path_100.json
 
     - name: Run benchmarks - Shortest Path 1000x1000
-      run: cargo run --release --target ${{ matrix.target }} -- --problem shortest-path --size 1000 --iterations 5 --output results/shortest_path_1000.json
+      run: ./bin/benchmark --problem shortest-path --size 1000 --iterations 5 --output results/shortest_path_1000.json
 
     - name: Run benchmarks - Random Graph 50
-      run: cargo run --release --target ${{ matrix.target }} -- --problem shortest-path-random --size 50 --iterations 10 --output results/shortest_path_random_50.json
+      run: ./bin/benchmark --problem shortest-path-random --size 50 --iterations 10 --output results/shortest_path_random_50.json
 
     - name: Run benchmarks - Random Graph 200
-      run: cargo run --release --target ${{ matrix.target }} -- --problem shortest-path-random --size 200 --iterations 10 --output results/shortest_path_random_200.json
+      run: ./bin/benchmark --problem shortest-path-random --size 200 --iterations 10 --output results/shortest_path_random_200.json
 
     - name: Run benchmarks - Random Graph 500
-      run: cargo run --release --target ${{ matrix.target }} -- --problem shortest-path-random --size 500 --iterations 5 --output results/shortest_path_random_500.json
+      run: ./bin/benchmark --problem shortest-path-random --size 500 --iterations 5 --output results/shortest_path_random_500.json
 
     - name: Merge results
       run: |
@@ -105,37 +127,34 @@ jobs:
     - name: Generate reports
       run: python analysis/generate_report.py results/
 
-    - name: Copy executable to results
-      shell: bash
-      run: |
-        mkdir -p results/bin
-        cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} results/bin/
+    - name: Download Windows binary
+      uses: actions/download-artifact@v4
+      with:
+        name: windows-latest-binary
+        path: results/bin/windows
+
+    - name: Copy Linux binary
+      run: cp ./bin/benchmark results/bin/linux/
 
     - name: Create archive
-      shell: bash
-      run: |
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          7z a ${{ matrix.archive_name }} results/
-        else
-          zip -r ${{ matrix.archive_name }} results/
-        fi
+      run: zip -r benchmarking-results.zip results/
 
-    - name: Upload artifacts
+    - name: Upload benchmark results
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.os }}-benchmark-results
-        path: ${{ matrix.archive_name }}
+        name: benchmark-results
+        path: benchmarking-results.zip
         retention-days: 30
 
-    - name: Upload results separately
+    - name: Upload results JSON
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ matrix.os }}-results-json
+        name: results-json
         path: results/*.json
         retention-days: 30
 
   create-release:
-    needs: build-and-test
+    needs: benchmark
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     

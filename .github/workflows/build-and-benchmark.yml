@@ -60,6 +60,41 @@ jobs:
   benchmark:
     needs: build
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        benchmark:
+          - name: taquin_3x3
+            problem: taquin
+            size: 3
+            iterations: 20
+          - name: taquin_4x4
+            problem: taquin
+            size: 4
+            iterations: 5
+          - name: shortest_path_10
+            problem: shortest-path
+            size: 10
+            iterations: 10
+          - name: shortest_path_100
+            problem: shortest-path
+            size: 100
+            iterations: 10
+          - name: shortest_path_1000
+            problem: shortest-path
+            size: 1000
+            iterations: 5
+          - name: shortest_path_random_50
+            problem: shortest-path-random
+            size: 50
+            iterations: 10
+          - name: shortest_path_random_200
+            problem: shortest-path-random
+            size: 200
+            iterations: 10
+          - name: shortest_path_random_500
+            problem: shortest-path-random
+            size: 500
+            iterations: 5
 
     steps:
     - name: Checkout code
@@ -73,6 +108,39 @@ jobs:
 
     - name: Make binary executable
       run: chmod +x ./bin/benchmark
+
+    - name: Run benchmark - ${{ matrix.benchmark.name }}
+      run: |
+        mkdir -p results
+        ./bin/benchmark --problem ${{ matrix.benchmark.problem }} --size ${{ matrix.benchmark.size }} --iterations ${{ matrix.benchmark.iterations }} --output results/${{ matrix.benchmark.name }}.json
+
+    - name: Upload benchmark result
+      uses: actions/upload-artifact@v4
+      with:
+        name: result-${{ matrix.benchmark.name }}
+        path: results/${{ matrix.benchmark.name }}.json
+        retention-days: 1
+
+  analyze:
+    needs: benchmark
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Download all benchmark results
+      uses: actions/download-artifact@v4
+      with:
+        pattern: result-*
+        path: results-raw
+        merge-multiple: false
+
+    - name: Organize results
+      run: |
+        mkdir -p results
+        find results-raw -name "*.json" -exec cp {} results/ \;
+        ls -la results/
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -89,30 +157,6 @@ jobs:
 
     - name: Install Python dependencies
       run: pip install -r requirements.txt
-
-    - name: Run benchmarks - Taquin 3x3
-      run: ./bin/benchmark --problem taquin --size 3 --iterations 20 --output results/taquin_3x3.json
-
-    - name: Run benchmarks - Taquin 4x4
-      run: ./bin/benchmark --problem taquin --size 4 --iterations 5 --output results/taquin_4x4.json
-
-    - name: Run benchmarks - Shortest Path 10x10
-      run: ./bin/benchmark --problem shortest-path --size 10 --iterations 10 --output results/shortest_path_10.json
-
-    - name: Run benchmarks - Shortest Path 100x100
-      run: ./bin/benchmark --problem shortest-path --size 100 --iterations 10 --output results/shortest_path_100.json
-
-    - name: Run benchmarks - Shortest Path 1000x1000
-      run: ./bin/benchmark --problem shortest-path --size 1000 --iterations 5 --output results/shortest_path_1000.json
-
-    - name: Run benchmarks - Random Graph 50
-      run: ./bin/benchmark --problem shortest-path-random --size 50 --iterations 10 --output results/shortest_path_random_50.json
-
-    - name: Run benchmarks - Random Graph 200
-      run: ./bin/benchmark --problem shortest-path-random --size 200 --iterations 10 --output results/shortest_path_random_200.json
-
-    - name: Run benchmarks - Random Graph 500
-      run: ./bin/benchmark --problem shortest-path-random --size 500 --iterations 5 --output results/shortest_path_random_500.json
 
     - name: Merge results
       run: |
@@ -160,7 +204,7 @@ jobs:
         retention-days: 30
 
   create-release:
-    needs: benchmark
+    needs: analyze
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     permissions:

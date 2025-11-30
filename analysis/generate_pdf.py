@@ -152,7 +152,7 @@ def generate_combined_pdf(json_files, output_path, include_details=False, analys
     all_content.append("\\vspace{1cm}\n")
     all_content.append(f"{{\\large {datetime.now().strftime('%d/%m/%Y')}\\par}}\n")
     all_content.append("\\vfill\n")
-    all_content.append("{\\normalsize Généré automatiquement par le framework de benchmarking\\par}\n")
+    all_content.append("{\\normalsize \\par}\n")
     all_content.append("\\end{titlepage}\n")
     all_content.append("\n")
     

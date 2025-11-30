@@ -146,7 +146,6 @@ class ReportGenerator:
             
             f.write("\n---\n\n")
             f.write("[Voir les détails de chaque instance](details.md)\n\n")
-            f.write("*Rapport généré automatiquement*\n")
         
         print(f"Rapport généré: {output_file}")
     

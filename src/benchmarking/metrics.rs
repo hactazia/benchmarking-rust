@@ -1,39 +1,24 @@
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-/// Métriques de performance pour un algorithme de recherche
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Metrics {
-    /// Temps d'exécution en millisecondes
     pub time_ms: f64,
-    
-    /// Mémoire utilisée en Ko
     pub memory_kb: usize,
-    
-    /// Nombre de nœuds visités
     pub nodes_visited: usize,
-    
-    /// Nombre de nœuds générés
     pub nodes_generated: usize,
-    
-    /// Taille maximale de la frontière
     pub max_frontier_size: usize,
-    
-    /// Longueur de la solution trouvée
     pub solution_length: usize,
 }
 
 impl Metrics {
-    /// Calcule le facteur de branchement effectif
     pub fn effective_branching_factor(&self) -> f64 {
         if self.solution_length == 0 {
             return 0.0;
         }
-        
-        // Approximation: b^d ≈ N où N = nodes_generated, d = solution_length
+
         (self.nodes_generated as f64).powf(1.0 / self.solution_length as f64)
     }
-    
-    /// Retourne un résumé formaté des métriques
+
     pub fn summary(&self) -> String {
         format!(
             "{:.2}ms\t{:4}Ko\t{:4}v\t{:4}g\t{:4}\t{:.2}",
@@ -47,7 +32,6 @@ impl Metrics {
     }
 }
 
-/// Résultat d'un benchmark unique
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BenchmarkResult {
     pub algorithm: String,
@@ -63,7 +47,6 @@ pub struct BenchmarkResult {
     pub error: Option<String>,
 }
 
-/// Résultats agrégés de plusieurs benchmarks
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AggregatedResults {
     pub algorithm: String,
@@ -80,15 +63,12 @@ pub struct AggregatedResults {
 }
 
 impl AggregatedResults {
-    /// Calcule les résultats agrégés à partir d'un ensemble de résultats
     pub fn from_results(results: &[BenchmarkResult]) -> Self {
         let total = results.len();
         let successful = results.iter().filter(|r| r.success).count();
-        
-        let successful_results: Vec<_> = results.iter()
-            .filter(|r| r.success)
-            .collect();
-        
+
+        let successful_results: Vec<_> = results.iter().filter(|r| r.success).collect();
+
         if successful_results.is_empty() {
             return AggregatedResults {
                 algorithm: results[0].algorithm.clone(),
@@ -104,21 +84,45 @@ impl AggregatedResults {
                 avg_ebf: 0.0,
             };
         }
-        
+
         let n = successful_results.len() as f64;
-        
+
         AggregatedResults {
             algorithm: results[0].algorithm.clone(),
             problem: results[0].problem.clone(),
             problem_size: results[0].problem_size,
             total_instances: total,
             successful_instances: successful,
-            avg_time_ms: successful_results.iter().map(|r| r.metrics.time_ms).sum::<f64>() / n,
-            avg_memory_kb: successful_results.iter().map(|r| r.metrics.memory_kb).sum::<usize>() as f64 / n,
-            avg_nodes_visited: successful_results.iter().map(|r| r.metrics.nodes_visited).sum::<usize>() as f64 / n,
-            avg_nodes_generated: successful_results.iter().map(|r| r.metrics.nodes_generated).sum::<usize>() as f64 / n,
-            avg_solution_length: successful_results.iter().map(|r| r.metrics.solution_length).sum::<usize>() as f64 / n,
-            avg_ebf: successful_results.iter().map(|r| r.metrics.effective_branching_factor()).sum::<f64>() / n,
+            avg_time_ms: successful_results
+                .iter()
+                .map(|r| r.metrics.time_ms)
+                .sum::<f64>()
+                / n,
+            avg_memory_kb: successful_results
+                .iter()
+                .map(|r| r.metrics.memory_kb)
+                .sum::<usize>() as f64
+                / n,
+            avg_nodes_visited: successful_results
+                .iter()
+                .map(|r| r.metrics.nodes_visited)
+                .sum::<usize>() as f64
+                / n,
+            avg_nodes_generated: successful_results
+                .iter()
+                .map(|r| r.metrics.nodes_generated)
+                .sum::<usize>() as f64
+                / n,
+            avg_solution_length: successful_results
+                .iter()
+                .map(|r| r.metrics.solution_length)
+                .sum::<usize>() as f64
+                / n,
+            avg_ebf: successful_results
+                .iter()
+                .map(|r| r.metrics.effective_branching_factor())
+                .sum::<f64>()
+                / n,
         }
     }
 }

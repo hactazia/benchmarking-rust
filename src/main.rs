@@ -7,36 +7,29 @@ mod benchmarking;
 mod problems;
 mod utils;
 
-use benchmarking::{BenchmarkRunner, BenchmarkConfig};
+use benchmarking::{BenchmarkConfig, BenchmarkRunner};
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "Benchmarking d'algorithmes de recherche", long_about = None)]
 struct Args {
-    /// Algorithme à utiliser (all, bfs, dfs, id, astar, idastar)
     #[arg(short, long, default_value = "all")]
     algorithm: String,
 
-    /// Problème à résoudre (all, taquin, shortest-path, shortest-path-random)
     #[arg(short, long, default_value = "all")]
     problem: String,
 
-    /// Taille du problème (pour le taquin: 3, 4, 5)
     #[arg(short, long, default_value = "3")]
     size: usize,
 
-    /// Nombre d'instances à tester
     #[arg(short, long, default_value = "10")]
     iterations: usize,
 
-    /// Fichier de sortie pour les résultats
     #[arg(short, long, default_value = "results/benchmark_results.json")]
     output: String,
 
-    /// Nombre de threads (0 = auto-détection)
     #[arg(short = 't', long, default_value = "0")]
     threads: usize,
 
-    /// Timeout par algorithme en secondes (0 = pas de timeout)
     #[arg(long, default_value = "60")]
     timeout: u64,
 }
@@ -44,13 +37,12 @@ struct Args {
 fn main() {
     let args = Args::parse();
 
-    // Configurer le nombre de threads
     let num_threads = if args.threads == 0 {
         num_cpus::get()
     } else {
         args.threads
     };
-    
+
     rayon::ThreadPoolBuilder::new()
         .num_threads(num_threads)
         .build_global()
@@ -65,7 +57,6 @@ fn main() {
     println!("  Timeout: {}sec", args.timeout);
     println!();
 
-    // Créer le dossier de résultats s'il n'existe pas
     fs::create_dir_all("results").expect("Impossible de créer le dossier results");
 
     let config = BenchmarkConfig {
@@ -80,7 +71,7 @@ fn main() {
 
     let start = Instant::now();
     let runner = BenchmarkRunner::new(config);
-    
+
     match runner.run() {
         Ok(_) => {
             let duration = start.elapsed();

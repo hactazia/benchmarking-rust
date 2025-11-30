@@ -2,4 +2,4 @@ pub mod metrics;
 pub mod runner;
 
 pub use metrics::Metrics;
-pub use runner::{BenchmarkRunner, BenchmarkConfig};
+pub use runner::{BenchmarkConfig, BenchmarkRunner};

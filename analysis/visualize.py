@@ -306,9 +306,9 @@ class BenchmarkVisualizer:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
         # Tri par problème puis algorithme - calculer le taux de succès (status == 0)
-        success_rate = self.df.groupby(['problem', 'algorithm'], as_index=True).apply(
-            lambda x: (x['status'] == 0).mean() * 100,
-            include_groups=False
+        # Compatible avec pandas < 2.2 et >= 2.2
+        success_rate = self.df.groupby(['problem', 'algorithm'], as_index=True)['status'].apply(
+            lambda x: (x == 0).mean() * 100
         )
         success_rate = success_rate.sort_index()
         

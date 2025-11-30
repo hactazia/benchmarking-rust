@@ -12,7 +12,6 @@ pub struct Metrics {
     pub solution_length: usize,
 }
 
-/// Métriques partagées pour permettre la récupération en cas de timeout
 #[derive(Clone)]
 pub struct SharedMetrics {
     inner: Arc<Mutex<Metrics>>,
@@ -107,7 +106,6 @@ pub struct BenchmarkResult {
     pub problem: String,
     pub problem_size: usize,
     pub instance_id: usize,
-    /// 0 = succès, 1 = timeout, 2 = pas de solution trouvée
     pub status: u8,
     pub metrics: Metrics,
     pub timestamp: String,

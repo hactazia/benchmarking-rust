@@ -73,7 +73,7 @@ class ReportGenerator:
             stats = {
                 'Problème': problem,
                 'Algorithme': algo,
-                'Statut': '✅ Succès',
+                'Statut': 'Succès',
                 'Nb': f"{len(group)}/{total}",
                 'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}" if len(group) > 1 else f"{group['time_ms'].mean():.2f}",
                 'Mémoire (Ko)': f"{group['memory_kb'].mean():.0f}",
@@ -89,7 +89,7 @@ class ReportGenerator:
             stats = {
                 'Problème': problem,
                 'Algorithme': algo,
-                'Statut': '⏱️ Timeout',
+                'Statut': 'Timeout',
                 'Nb': f"{len(group)}/{total}",
                 'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}" if len(group) > 1 else f"{group['time_ms'].mean():.2f}",
                 'Mémoire (Ko)': f"{group['memory_kb'].mean():.0f}" if group['memory_kb'].mean() > 0 else "—",
@@ -105,7 +105,7 @@ class ReportGenerator:
             stats = {
                 'Problème': problem,
                 'Algorithme': algo,
-                'Statut': '❌ Pas trouvé',
+                'Statut': 'Pas trouvé',
                 'Nb': f"{len(group)}/{total}",
                 'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}" if len(group) > 1 else f"{group['time_ms'].mean():.2f}",
                 'Mémoire (Ko)': f"{group['memory_kb'].mean():.0f}" if group['memory_kb'].mean() > 0 else "—",
@@ -194,6 +194,7 @@ class ReportGenerator:
             f.write(f"![Nœuds visités](../../visuals/{self.base_name}/nodes_visited.png)\n\n")
             f.write(f"![Nœuds générés](../../visuals/{self.base_name}/nodes_generated.png)\n\n")
             f.write(f"![Taux de succès](../../visuals/{self.base_name}/success_rate.png)\n\n")
+            f.write(f"![Heatmap](../../visuals/{self.base_name}/heatmap_time.png)\n\n")
             
             f.write("\n---\n\n")
             f.write("[Voir les détails de chaque instance](details.md)\n\n")
@@ -253,7 +254,7 @@ class ReportGenerator:
                 initial_state = result.get('initial_state', None)
                 
                 # 0=succès, 1=timeout, 2=pas de solution
-                status_emoji = "✅" if status == 0 else ("⏱️" if status == 1 else "❌")
+                status_emoji = "OK" if status == 0 else ("TO" if status == 1 else "ER")
                 f.write(f"#### {status_emoji} Instance #{instance_id}\n\n")
                 
                 if status == 0:
@@ -321,7 +322,7 @@ class ReportGenerator:
         content.append("\\vspace{1cm}\n")
         content.append(f"{{\\large {datetime.now().strftime('%d/%m/%Y')}\\par}}\n")
         content.append("\\vfill\n")
-        content.append("{\\normalsize Généré automatiquement par le framework de benchmarking\\par}\n")
+        content.append("{\\normalsize \\par}\n")
         content.append("\\end{titlepage}\n")
         content.append("\n")
         
@@ -492,6 +493,7 @@ class ReportGenerator:
             ("nodes_visited.png", "Nœuds Visités"),
             ("nodes_generated.png", "Nœuds Générés"),
             ("success_rate.png", "Taux de Succès"),
+            ("heatmap_time.png", "Heatmap des Temps"),
         ]
         
         for filename, title in graphics:

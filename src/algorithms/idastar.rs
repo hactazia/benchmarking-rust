@@ -136,7 +136,7 @@ impl SearchAlgorithm for IDAStar {
                 return SearchResult {
                     solution: Some(solution),
                     metrics,
-                    status: 0, // Succès
+                    status: 0,
                 };
             }
 
@@ -152,11 +152,15 @@ impl SearchAlgorithm for IDAStar {
         SearchResult {
             solution: None,
             metrics,
-            status: 2, // Pas de solution
+            status: 2,
         }
     }
 
-    fn search_with_shared_metrics<P: Problem>(&self, problem: &P, shared: SharedMetrics) -> SearchResult {
+    fn search_with_shared_metrics<P: Problem>(
+        &self,
+        problem: &P,
+        shared: SharedMetrics,
+    ) -> SearchResult {
         let initial_state = problem.initial_state();
         let mut bound = problem.heuristic(&initial_state);
         let initial_node = Node::new(initial_state);
@@ -175,7 +179,7 @@ impl SearchAlgorithm for IDAStar {
                 return SearchResult {
                     solution: Some(solution),
                     metrics: shared.get(),
-                    status: 0, // Succès
+                    status: 0,
                 };
             }
 
@@ -189,7 +193,7 @@ impl SearchAlgorithm for IDAStar {
         SearchResult {
             solution: None,
             metrics: shared.get(),
-            status: 2, // Pas de solution
+            status: 2,
         }
     }
 

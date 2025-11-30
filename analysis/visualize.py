@@ -418,9 +418,34 @@ class BenchmarkVisualizer:
             aggfunc='mean'
         )
         
-        fig, ax = plt.subplots(figsize=(10, 8))
-        sns.heatmap(pivot_data, annot=True, fmt='.1f', cmap='YlOrRd', ax=ax)
-        ax.set_title('Heatmap des Temps d\'Exécution (ms)')
+        fig, ax = plt.subplots(figsize=(12, 8))
+        heatmap = sns.heatmap(pivot_data, annot=True, fmt='.1f', cmap='YlOrRd', ax=ax, linewidths=0.5)
+        
+        # Ajouter des bordures pour le meilleur (vert) et le pire (noir) par colonne
+        for col_idx, col in enumerate(pivot_data.columns):
+            col_data = pivot_data[col].dropna()
+            if len(col_data) > 0:
+                min_idx = col_data.idxmin()  # Meilleur (temps le plus bas)
+                max_idx = col_data.idxmax()  # Pire (temps le plus haut)
+                
+                row_labels = list(pivot_data.index)
+                min_row = row_labels.index(min_idx)
+                max_row = row_labels.index(max_idx)
+                
+                # Bordure verte pour le meilleur
+                ax.add_patch(plt.Rectangle(
+                    (col_idx, min_row), 1, 1,
+                    fill=False, edgecolor='green', linewidth=1
+                ))
+                
+                # Bordure noire pour le pire (seulement si différent du meilleur)
+                if min_row != max_row:
+                    ax.add_patch(plt.Rectangle(
+                        (col_idx, max_row), 1, 1,
+                        fill=False, edgecolor='black', linewidth=1
+                    ))
+        
+        ax.set_title('Heatmap des Temps d\'Exécution (ms)\n(vert = meilleur, noir = pire)')
         ax.set_xlabel('Problème')
         ax.set_ylabel('Algorithme')
         plt.tight_layout()

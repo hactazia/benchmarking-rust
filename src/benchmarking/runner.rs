@@ -73,20 +73,24 @@ impl BenchmarkRunner {
             let shared_metrics_clone = shared_metrics.clone();
 
             std::thread::spawn(move || {
-                let res = Self::execute_algorithm_with_shared(&algo, &problem_clone, shared_metrics_clone, max_depth);
+                let res = Self::execute_algorithm_with_shared(
+                    &algo,
+                    &problem_clone,
+                    shared_metrics_clone,
+                    max_depth,
+                );
                 let _ = tx.send(res);
             });
 
             match rx.recv_timeout(timeout_duration) {
                 Ok(res) => (res, None),
                 Err(RecvTimeoutError::Timeout) => {
-                    // Récupérer les métriques partielles même en cas de timeout
                     let partial_metrics = shared_metrics.get();
                     (
                         SearchResult {
                             solution: None,
                             metrics: partial_metrics,
-                            status: 1, // Timeout
+                            status: 1,
                         },
                         Some(format!(
                             "Timeout après {} secondes",
@@ -98,7 +102,7 @@ impl BenchmarkRunner {
                     SearchResult {
                         solution: None,
                         metrics: crate::benchmarking::Metrics::default(),
-                        status: 2, // Erreur
+                        status: 2,
                     },
                     Some("Erreur de communication".to_string()),
                 ),
@@ -108,7 +112,11 @@ impl BenchmarkRunner {
         }
     }
 
-    fn execute_algorithm<P: Problem>(algo_name: &str, problem: &P, max_depth: usize) -> SearchResult {
+    fn execute_algorithm<P: Problem>(
+        algo_name: &str,
+        problem: &P,
+        max_depth: usize,
+    ) -> SearchResult {
         match algo_name {
             "BFS" => bfs::BFS.search(problem),
             "DFS" => dfs::DFS::with_max_depth(max_depth).search(problem),
@@ -118,22 +126,32 @@ impl BenchmarkRunner {
             _ => SearchResult {
                 solution: None,
                 metrics: crate::benchmarking::Metrics::default(),
-                status: 2, // Pas de solution
+                status: 2,
             },
         }
     }
 
-    fn execute_algorithm_with_shared<P: Problem>(algo_name: &str, problem: &P, shared: SharedMetrics, max_depth: usize) -> SearchResult {
+    fn execute_algorithm_with_shared<P: Problem>(
+        algo_name: &str,
+        problem: &P,
+        shared: SharedMetrics,
+        max_depth: usize,
+    ) -> SearchResult {
         match algo_name {
             "BFS" => bfs::BFS.search_with_shared_metrics(problem, shared),
-            "DFS" => dfs::DFS::with_max_depth(max_depth).search_with_shared_metrics(problem, shared),
-            "ID" => iterative_deepening::IterativeDeepening::new(max_depth).search_with_shared_metrics(problem, shared),
+            "DFS" => {
+                dfs::DFS::with_max_depth(max_depth).search_with_shared_metrics(problem, shared)
+            }
+            "ID" => iterative_deepening::IterativeDeepening::new(max_depth)
+                .search_with_shared_metrics(problem, shared),
             "A*-Manhattan" | "A*" => astar::AStar.search_with_shared_metrics(problem, shared),
-            "IDA*-Manhattan" | "IDA*" => idastar::IDAStar::new(max_depth * 2).search_with_shared_metrics(problem, shared),
+            "IDA*-Manhattan" | "IDA*" => {
+                idastar::IDAStar::new(max_depth * 2).search_with_shared_metrics(problem, shared)
+            }
             _ => SearchResult {
                 solution: None,
                 metrics: crate::benchmarking::Metrics::default(),
-                status: 2, // Pas de solution
+                status: 2,
             },
         }
     }
@@ -189,9 +207,11 @@ impl BenchmarkRunner {
                 let summary = if result.status == 0 {
                     result.metrics.summary()
                 } else if let Some(ref err) = error_msg {
-                    // Afficher le message d'erreur avec les métriques partielles si disponibles
                     if result.metrics.nodes_visited > 0 {
-                        format!("{} (partiel: {}v/{}g)", err, result.metrics.nodes_visited, result.metrics.nodes_generated)
+                        format!(
+                            "{} (partiel: {}v/{}g)",
+                            err, result.metrics.nodes_visited, result.metrics.nodes_generated
+                        )
                     } else {
                         err.clone()
                     }
@@ -208,13 +228,19 @@ impl BenchmarkRunner {
                     summary
                 );
 
-                // Déterminer le status final et le message d'erreur
                 let (final_status, final_error) = if result.status == 0 {
                     (0, None)
-                } else if error_msg.as_ref().map(|e| e.contains("Timeout")).unwrap_or(false) {
-                    (1, error_msg) // Timeout
+                } else if error_msg
+                    .as_ref()
+                    .map(|e| e.contains("Timeout"))
+                    .unwrap_or(false)
+                {
+                    (1, error_msg)
                 } else {
-                    (2, error_msg.or_else(|| Some("Pas de solution trouvée".to_string()))) // Pas de solution
+                    (
+                        2,
+                        error_msg.or_else(|| Some("Pas de solution trouvée".to_string())),
+                    )
                 };
 
                 Some(BenchmarkResult {
@@ -271,7 +297,6 @@ impl BenchmarkRunner {
     fn benchmark_taquin(&self) -> Result<Vec<BenchmarkResult>, Box<dyn std::error::Error>> {
         let algorithm_names = self.get_algorithm_names(true)?;
         let size = self.config.size;
-        // Pour le taquin, la profondeur max dépend de la complexité (taille² * 10 devrait suffire)
         let max_depth = size * size * 10;
 
         let problem_generator = move |_instance_id: usize| {
@@ -292,15 +317,13 @@ impl BenchmarkRunner {
     fn benchmark_shortest_path(&self) -> Result<Vec<BenchmarkResult>, Box<dyn std::error::Error>> {
         let algorithm_names = self.get_algorithm_names(false)?;
         let size = self.config.size;
-        // Pour une grille NxN :
-        // - Le chemin optimal est de longueur 2*(N-1)
-        // - DFS peut zigzaguer donc on utilise size*size
-        // - ID est très lent sur grandes grilles (recalcule tout à chaque profondeur)
-        // On limite à min(size*size, 500) pour éviter les temps infinis avec ID
         let max_depth = (size * size).min(500);
 
         if size > 20 {
-            println!("  Note: ID peut être lent sur grandes grilles (profondeur max: {})\n", max_depth);
+            println!(
+                "  Note: ID peut être lent sur grandes grilles (profondeur max: {})\n",
+                max_depth
+            );
         }
 
         let problem_generator = move |_instance_id: usize| ShortestPath::generate_grid(size, size);
@@ -321,7 +344,6 @@ impl BenchmarkRunner {
         let size = self.config.size;
         let nodes = size;
         let edges = nodes * 3;
-        // Pour un graphe aléatoire, on utilise le nombre de nœuds comme profondeur max
         let max_depth = nodes;
 
         println!(

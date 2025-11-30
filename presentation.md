@@ -22,10 +22,10 @@ Comparer les performances de **5 algorithmes de recherche** sur des problèmes c
 - **A\*** (A-Star): Un algorithme informé utilisant une heuristique pour guider la recherche.
 - **IDA\*** (Iterative Deepening A-Star): Variante d'A* utilisant une approche de profondeur itérative.
 
-*\*Avec une heuristique admissible (ei. ne surestime jamais le coût)*
-*d = profondeur de la solution (ie. nombre de coups)*
-*b = facteur de branchement (ie. nombre moyen de successeurs)*
-*Informé = utilise une heuristique pour guider la recherche*
+*\*Avec une heuristique admissible (ei. ne surestime jamais le coût)*  
+*d = profondeur de la solution (ie. nombre de coups)*  
+*b = facteur de branchement (ie. nombre moyen de successeurs)*  
+*Informé = utilise une heuristique pour guider la recherche*  
 
 ### Problèmes Testés
 
@@ -83,13 +83,13 @@ Comparer les performances de **5 algorithmes de recherche** sur des problèmes c
 
 ### Plus Court Chemin - Graphes Aléatoires
 
-| Taille | Meilleur Algo | Temps | Mémoire | Succès |
-|--------|---------------|-------|---------|--------|
-| 50 nœuds | A\* | 0 ms | 0 Ko | 10/10 |
-| 200 nœuds | A\* | 0 ms | 0 Ko | 10/10 |
-| 500 nœuds | BFS | 0.25 ms | 2 Ko | 4/5 |
+| Taille | Meilleur Algo | Temps | Mémoire | Nœuds Visités | Succès |
+|--------|---------------|-------|---------|---------------|--------|
+| 50 nœuds | A\* | 0 ms | 0 Ko | 16 | 10/10 |
+| 200 nœuds | A\* | 0 ms | 0 Ko | 56 | 10/10 |
+| 500 nœuds | BFS | 0.25 ms | 2 Ko | 238 | 4/5 |
 
-**Observation clé** : Sur les graphes aléatoires, A\* et BFS sont très efficaces. Les échecs sont dus à des graphes non connexes.
+**Observation clé** : Sur les graphes aléatoires, A\* et BFS sont très efficaces. Les échecs (1/5 sur 500 nœuds) sont dus à des graphes non connexes.
 
 ---
 
@@ -126,6 +126,7 @@ L'heuristique Manhattan réduit drastiquement les nœuds explorés :
 ### Pourquoi A\* est-il si rapide ?
 
 A\* utilise f(n) = g(n) + h(n) :
+
 - **g(n)** : coût réel depuis le départ → garantit l'optimalité
 - **h(n)** : estimation heuristique → guide vers la solution
 
@@ -147,11 +148,12 @@ A\* utilise f(n) = g(n) + h(n) :
 
 | Contrainte | Algorithme | Justification |
 |------------|------------|---------------|
-| Mémoire limitée | **IDA\*** | 0 Ko sur toutes les instances |
-| Temps critique | **A\*** | 6.50 ms sur Taquin-3×3, 743 ms sur Taquin-4×4 |
-| Grandes grilles | **IDA\*** | 320 ms sur 1000×1000 avec 0 Ko |
-| Petit problème | BFS | Simple et efficace sur grilles ≤100×100 |
-| Sans optimalité | DFS | Rapide mais solutions 5× plus longues |
+| Mémoire limitée | **IDA\*** | 0 Ko constant sur toutes les instances |
+| Temps critique + heuristique disponible | **A\*** | 6.50 ms sur Taquin-3×3, 743 ms sur Taquin-4×4 |
+| Grandes grilles régulières | **IDA\*** | 320 ms sur 1000×1000 avec 0 Ko (seul à réussir) |
+| Graphes aléatoires | **A\*** | 0 ms sur 50-200 nœuds, 100% succès |
+| Petite grille sans heuristique | BFS | 93 ms sur 100×100, garanti optimal |
+| Exploration rapide (non optimal) | DFS | Solutions trouvées rapidement mais 5× plus longues |
 
 ---
 

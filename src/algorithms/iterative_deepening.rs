@@ -36,7 +36,7 @@ impl SearchAlgorithm for IterativeDeepening {
                 return SearchResult {
                     solution: result.solution,
                     metrics: total_metrics,
-                    status: 0, // Succès
+                    status: 0,
                 };
             }
         }
@@ -46,21 +46,24 @@ impl SearchAlgorithm for IterativeDeepening {
         SearchResult {
             solution: None,
             metrics: total_metrics,
-            status: 2, // Pas de solution
+            status: 2,
         }
     }
 
-    fn search_with_shared_metrics<P: Problem>(&self, problem: &P, shared: SharedMetrics) -> SearchResult {
+    fn search_with_shared_metrics<P: Problem>(
+        &self,
+        problem: &P,
+        shared: SharedMetrics,
+    ) -> SearchResult {
         for depth in 0..=self.max_depth {
             let dfs = DFS::with_max_depth(depth);
-            // On utilise la version partagée du DFS pour avoir les métriques mises à jour
             let result = dfs.search_with_shared_metrics(problem, shared.clone());
 
             if result.status == 0 {
                 return SearchResult {
                     solution: result.solution,
                     metrics: shared.get(),
-                    status: 0, // Succès
+                    status: 0,
                 };
             }
         }
@@ -68,7 +71,7 @@ impl SearchAlgorithm for IterativeDeepening {
         SearchResult {
             solution: None,
             metrics: shared.get(),
-            status: 2, // Pas de solution
+            status: 2,
         }
     }
 

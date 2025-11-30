@@ -234,12 +234,232 @@ class ReportGenerator:
             f.write("\n[Retour au rapport principal](index.md)\n")
         
         print(f"Rapport détaillé généré: {output_file}")
-
+    
+    def get_combined_markdown(self, include_details=False, analyses_file=None):
+        """Retourne le contenu markdown combiné pour l'export PDF
+        
+        Args:
+            include_details: Si True, inclut les détails des instances à la fin
+            analyses_file: Chemin vers le fichier analyses.md à inclure
+        """
+        # Générer le contenu du rapport principal en mémoire
+        content = []
+        
+        # Page de garde
+        content.append("\\begin{titlepage}\n")
+        content.append("\\centering\n")
+        content.append("\\vspace*{3cm}\n")
+        content.append("{\\Huge\\bfseries Rapport de Benchmarking\\par}\n")
+        content.append("\\vspace{1cm}\n")
+        content.append("{\\Large Analyse des Algorithmes de Recherche\\par}\n")
+        content.append("\\vspace{2cm}\n")
+        content.append(f"{{\\large {self.base_name}\\par}}\n")
+        content.append("\\vspace{1cm}\n")
+        content.append(f"{{\\large {datetime.now().strftime('%d/%m/%Y')}\\par}}\n")
+        content.append("\\vfill\n")
+        content.append("{\\normalsize Généré automatiquement par le framework de benchmarking\\par}\n")
+        content.append("\\end{titlepage}\n")
+        content.append("\n")
+        
+        # Page vide
+        content.append("\\newpage\n")
+        content.append("\\thispagestyle{empty}\n")
+        content.append("\\mbox{}\n")
+        content.append("\\newpage\n")
+        content.append("\n")
+        
+        # Table des matières (générée par pandoc avec --toc)
+        
+        # Section Analyse (depuis analyses.md)
+        if analyses_file:
+            analyses_path = Path(analyses_file)
+            if analyses_path.exists():
+                with open(analyses_path, 'r', encoding='utf-8') as f:
+                    analyses_content = f.read().strip()
+                if analyses_content:
+                    content.append("\n\\newpage\n")
+                    content.append(analyses_content)
+                    content.append("\n")
+        
+        # En-tête du rapport
+        content.append("\n\\newpage\n")
+        content.append("# Résultats du Benchmarking\n")
+        content.append(f"**Date:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n")
+        content.append(f"**Fichier:** {self.base_name}\n")
+        content.append("\n---\n")
+        
+        # Résumé des données
+        content.append("\n## Vue d'Ensemble\n")
+        content.append(f"- **Nombre total de tests:** {len(self.df)}\n")
+        content.append(f"- **Tests réussis:** {self.df['success'].sum()} ({self.df['success'].mean()*100:.1f}%)\n")
+        content.append(f"- **Algorithmes testés:** {self.df['algorithm'].nunique()}\n")
+        content.append(f"- **Problèmes testés:** {self.df['problem'].nunique()}\n")
+        
+        # Statistiques résumées
+        content.append("\n## Statistiques Résumées\n")
+        summary = self.generate_summary_statistics()
+        content.append(summary.to_markdown(index=False))
+        content.append("\n")
+        
+        # Analyse des forces
+        content.append("\n## Analyse Comparative\n")
+        strengths = self.analyze_algorithm_strengths()
+        content.append(strengths.to_markdown(index=False))
+        content.append("\n")
+        
+        # Graphiques
+        content.append("\n\\newpage\n")
+        content.append("\n# Visualisations\n")
+        
+        # Liste des graphiques disponibles avec descriptions
+        graphics = [
+            ("time_comparison.png", "Comparaison des Temps d'Exécution"),
+            ("memory_comparison.png", "Comparaison de l'Utilisation Mémoire"),
+            ("nodes_comparison.png", "Comparaison des Nœuds Visités"),
+            ("success_rate.png", "Taux de Succès par Algorithme"),
+            ("heatmap_time.png", "Heatmap des Temps d'Exécution"),
+            ("size_scaling.png", "Évolution selon la Taille du Problème"),
+        ]
+        
+        for filename, title in graphics:
+            img_path = self.visuals_dir / filename
+            if img_path.exists():
+                content.append(f"\n## {title}\n\n")
+                # Utiliser un chemin absolu pour pandoc
+                abs_path = img_path.resolve()
+                # Forcer l'image à rester en place avec l'attribut width
+                content.append(f"![{title}]({abs_path}){{ width=100% }}\n")
+                content.append("\n\\newpage\n")
+        
+        # Détails des instances (optionnel, à la fin)
+        if include_details:
+            content.append("\n\\newpage\n")
+            content.append("\n# Détails des Instances\n")
+            
+            # Trier les résultats
+            sorted_results = sorted(
+                self.results_raw,
+                key=lambda x: (x['problem'], x['algorithm'], not x['success'], x['instance_id'])
+            )
+            
+            current_problem = None
+            current_algorithm = None
+            
+            for result in sorted_results:
+                problem = result['problem']
+                algorithm = result['algorithm']
+                
+                if problem != current_problem:
+                    current_problem = problem
+                    current_algorithm = None
+                    content.append(f"\n## {problem}\n")
+                
+                if algorithm != current_algorithm:
+                    current_algorithm = algorithm
+                    content.append(f"\n### {algorithm}\n")
+                    
+                    algo_results = [r for r in sorted_results 
+                                   if r['problem'] == problem and r['algorithm'] == algorithm]
+                    success_count = sum(1 for r in algo_results if r['success'])
+                    total_count = len(algo_results)
+                    content.append(f"**Taux de succès:** {success_count}/{total_count} ({success_count/total_count*100:.1f}%)\n")
+                
+                instance_id = result['instance_id']
+                success = result['success']
+                metrics = result['metrics']
+                error = result.get('error', None)
+                
+                status = "[OK]" if success else "[ECHEC]"
+                content.append(f"\n#### {status} Instance #{instance_id}\n")
+                
+                if success:
+                    content.append("| Métrique | Valeur |\n")
+                    content.append("|----------|--------|\n")
+                    content.append(f"| Temps | {metrics['time_ms']:.2f} ms |\n")
+                    content.append(f"| Mémoire | {metrics['memory_kb']:,} Ko |\n")
+                    content.append(f"| Nœuds visités | {metrics['nodes_visited']:,} |\n")
+                    content.append(f"| Longueur solution | {metrics['solution_length']} |\n")
+                else:
+                    content.append(f"**Erreur:** {error if error else 'Pas de solution trouvée'}\n")
+        
+        return "".join(content)
+    
+    def get_simple_markdown(self, include_details=False):
+        """Retourne le contenu markdown simplifié (sans page de garde) pour les rapports combinés
+        
+        Args:
+            include_details: Si True, inclut les détails des instances à la fin
+        """
+        content = []
+        
+        # Vue d'ensemble
+        content.append(f"\n**Nombre total de tests:** {len(self.df)}\n")
+        content.append(f"**Tests réussis:** {self.df['success'].sum()} ({self.df['success'].mean()*100:.1f}%)\n")
+        content.append(f"**Algorithmes testés:** {self.df['algorithm'].nunique()}\n")
+        content.append(f"**Problèmes testés:** {self.df['problem'].nunique()}\n")
+        
+        # Statistiques résumées
+        content.append("\n### Statistiques\n")
+        summary = self.generate_summary_statistics()
+        content.append(summary.to_markdown(index=False))
+        content.append("\n")
+        
+        # Analyse des forces
+        content.append("\n### Analyse Comparative\n")
+        strengths = self.analyze_algorithm_strengths()
+        content.append(strengths.to_markdown(index=False))
+        content.append("\n")
+        
+        # Graphiques
+        graphics = [
+            ("time_comparison.png", "Temps d'Exécution"),
+            ("memory_comparison.png", "Utilisation Mémoire"),
+            ("nodes_comparison.png", "Nœuds Visités"),
+            ("success_rate.png", "Taux de Succès"),
+        ]
+        
+        for filename, title in graphics:
+            img_path = self.visuals_dir / filename
+            if img_path.exists():
+                content.append(f"\n### {title}\n\n")
+                abs_path = img_path.resolve()
+                content.append(f"![{title}]({abs_path}){{ width=90% }}\n")
+                content.append("\n\\newpage\n")
+        
+        # Détails des instances (optionnel)
+        if include_details:
+            content.append("\n### Détails des Instances\n")
+            
+            sorted_results = sorted(
+                self.results_raw,
+                key=lambda x: (x['problem'], x['algorithm'], not x['success'], x['instance_id'])
+            )
+            
+            current_problem = None
+            current_algorithm = None
+            
+            for result in sorted_results:
+                problem = result['problem']
+                algorithm = result['algorithm']
+                
+                if problem != current_problem:
+                    current_problem = problem
+                    current_algorithm = None
+                    content.append(f"\n#### {problem}\n")
+                
+                if algorithm != current_algorithm:
+                    current_algorithm = algorithm
+                    algo_results = [r for r in sorted_results 
+                                   if r['problem'] == problem and r['algorithm'] == algorithm]
+                    success_count = sum(1 for r in algo_results if r['success'])
+                    total_count = len(algo_results)
+                    content.append(f"\n**{algorithm}:** {success_count}/{total_count} succès\n")
+        
+        return "".join(content)
 
 
 def main():
     import sys
-    import glob
     
     target = 'results/benchmark_results.json'
     if len(sys.argv) > 1:
@@ -280,7 +500,7 @@ def main():
             import traceback
             traceback.print_exc()
     
-    print(f"\n\n{success_count}/{len(json_files)} fichier(s) traité(s)")
+    print(f"\n{success_count}/{len(json_files)} fichier(s) traité(s)")
 
 
 if __name__ == '__main__':

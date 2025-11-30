@@ -33,12 +33,18 @@ class BenchmarkVisualizer:
         # Convertir en DataFrame pandas
         data = []
         for result in results:
+            # Support ancien format (success: bool) et nouveau format (status: int)
+            if 'status' in result:
+                status = result['status']
+            else:
+                status = 0 if result.get('success', False) else 2
+            
             row = {
                 'algorithm': result['algorithm'],
                 'problem': result['problem'],
                 'problem_size': result['problem_size'],
                 'instance_id': result['instance_id'],
-                'success': result['success'],
+                'status': status,  # 0=succès, 1=timeout, 2=pas de solution
                 'time_ms': result['metrics']['time_ms'],
                 'memory_kb': result['metrics']['memory_kb'],
                 'nodes_visited': result['metrics']['nodes_visited'],
@@ -51,29 +57,63 @@ class BenchmarkVisualizer:
         print(f"{len(self.df)} résultats chargés depuis {self.results_file}")
     
     def plot_time_comparison(self, output_dir=None):
-        """Graphique comparatif des temps d'exécution"""
+        """Graphique comparatif des temps d'exécution (succès seulement, pas de timeouts)"""
         if output_dir is None:
             output_dir = self.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        # Filtrer les résultats réussis
-        df_success = self.df[self.df['success']]
+        # status: 0=succès, 1=timeout, 2=pas de solution
+        df_success = self.df[self.df['status'] == 0]
+        df_not_found = self.df[(self.df['status'] == 2) & (self.df['nodes_visited'] > 0)]
         
-        if df_success.empty:
-            print("Warning: Aucun résultat réussi à visualiser")
+        if df_success.empty and df_not_found.empty:
+            print("Warning: Aucun résultat à visualiser")
             return
         
-        fig, ax = plt.subplots(figsize=(14, 8))
+        # Préparer les données pour les deux catégories (tri par problème puis algorithme)
+        all_groups = sorted(
+            self.df.groupby(['problem', 'algorithm']).first().index.tolist(),
+            key=lambda x: (x[0], x[1])
+        )
         
-        # Grouper par algorithme et problème
-        grouped = df_success.groupby(['algorithm', 'problem'])['time_ms'].agg(['mean', 'std'])
+        # Largeur dynamique
+        fig_width = self._calculate_figure_width(len(all_groups))
+        fig, ax = plt.subplots(figsize=(fig_width, 8))
         
-        grouped.plot(kind='bar', y='mean', yerr='std', ax=ax, capsize=4)
-        ax.set_xlabel('Algorithme - Problème')
+        x = np.arange(len(all_groups))
+        width = 0.35
+        
+        # Données succès
+        success_means = []
+        success_stds = []
+        for group in all_groups:
+            data = df_success[(df_success['problem'] == group[0]) & (df_success['algorithm'] == group[1])]['time_ms']
+            success_means.append(data.mean() if len(data) > 0 else 0)
+            success_stds.append(data.std() if len(data) > 1 else 0)
+        
+        # Données "pas de solution" (pas les timeouts)
+        not_found_means = []
+        not_found_stds = []
+        for group in all_groups:
+            data = df_not_found[(df_not_found['problem'] == group[0]) & (df_not_found['algorithm'] == group[1])]['time_ms']
+            not_found_means.append(data.mean() if len(data) > 0 else 0)
+            not_found_stds.append(data.std() if len(data) > 1 else 0)
+        
+        # Barres pour les succès
+        bars1 = ax.bar(x - width/2, success_means, width, yerr=success_stds, 
+                       label='Succès', color='steelblue', capsize=3)
+        
+        # Barres pour "pas de solution" (avec hachures) - pas les timeouts
+        bars2 = ax.bar(x + width/2, not_found_means, width, yerr=not_found_stds,
+                       label='Pas de solution', color='lightcoral', capsize=3,
+                       hatch='//', alpha=0.7, edgecolor='darkred')
+        
+        ax.set_xlabel('Problème - Algorithme')
         ax.set_ylabel('Temps (ms)')
-        ax.set_title('Comparaison des Temps d\'Exécution par Algorithme et Problème')
-        ax.legend(['Moyenne', 'Écart-type'])
-        plt.xticks(rotation=45, ha='right')
+        ax.set_title('Comparaison des Temps d\'Exécution (sans timeouts)')
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{g[0]}\n{g[1]}" for g in all_groups], rotation=45, ha='right')
+        ax.legend()
         plt.tight_layout()
         
         output_path = f'{output_dir}/time_comparison.png'
@@ -82,24 +122,59 @@ class BenchmarkVisualizer:
         plt.close()
     
     def plot_memory_comparison(self, output_dir=None):
-        """Graphique comparatif de l'utilisation mémoire"""
+        """Graphique comparatif de l'utilisation mémoire (succès et pas de solution, sans timeout)"""
         if output_dir is None:
             output_dir = self.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        df_success = self.df[self.df['success']]
+        # status: 0=succès, 1=timeout, 2=pas de solution
+        df_success = self.df[self.df['status'] == 0]
+        df_not_found = self.df[(self.df['status'] == 2) & (self.df['memory_kb'] > 0)]
         
-        if df_success.empty:
+        if df_success.empty and df_not_found.empty:
             return
         
-        fig, ax = plt.subplots(figsize=(14, 8))
+        # Tri par problème puis algorithme
+        all_groups = sorted(
+            self.df.groupby(['problem', 'algorithm']).first().index.tolist(),
+            key=lambda x: (x[0], x[1])
+        )
         
-        grouped = df_success.groupby(['algorithm', 'problem'])['memory_kb'].agg(['mean', 'std'])
-        grouped.plot(kind='bar', y='mean', yerr='std', ax=ax, capsize=4, color='coral')
-        ax.set_xlabel('Algorithme - Problème')
+        # Largeur dynamique
+        fig_width = self._calculate_figure_width(len(all_groups))
+        fig, ax = plt.subplots(figsize=(fig_width, 8))
+        
+        x = np.arange(len(all_groups))
+        width = 0.35
+        
+        # Mémoire - Succès
+        success_mem = []
+        success_std = []
+        for group in all_groups:
+            data = df_success[(df_success['problem'] == group[0]) & (df_success['algorithm'] == group[1])]['memory_kb']
+            success_mem.append(data.mean() if len(data) > 0 else 0)
+            success_std.append(data.std() if len(data) > 1 else 0)
+        
+        # Mémoire - Pas de solution
+        not_found_mem = []
+        not_found_std = []
+        for group in all_groups:
+            data = df_not_found[(df_not_found['problem'] == group[0]) & (df_not_found['algorithm'] == group[1])]['memory_kb']
+            not_found_mem.append(data.mean() if len(data) > 0 else 0)
+            not_found_std.append(data.std() if len(data) > 1 else 0)
+        
+        ax.bar(x - width/2, success_mem, width, yerr=success_std,
+               label='Succès', color='coral', capsize=3)
+        ax.bar(x + width/2, not_found_mem, width, yerr=not_found_std,
+               label='Pas de solution', color='lightgray', capsize=3,
+               hatch='//', alpha=0.7, edgecolor='darkred')
+        
+        ax.set_xlabel('Problème - Algorithme')
         ax.set_ylabel('Mémoire (Ko)')
-        ax.set_title('Comparaison de l\'Utilisation Mémoire par Algorithme et Problème')
-        plt.xticks(rotation=45, ha='right')
+        ax.set_title('Comparaison de l\'Utilisation Mémoire (sans timeouts)')
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{g[0]}\n{g[1]}" for g in all_groups], rotation=45, ha='right')
+        ax.legend()
         plt.tight_layout()
         
         output_path = f'{output_dir}/memory_comparison.png'
@@ -107,40 +182,121 @@ class BenchmarkVisualizer:
         print(f"Comparaison de la mémoire générée: {output_path}")
         plt.close()
     
-    def plot_nodes_comparison(self, output_dir=None):
-        """Graphique comparatif du nombre de nœuds visités"""
+    def _calculate_figure_width(self, num_groups):
+        """Calcule la largeur optimale du graphique selon le nombre de groupes"""
+        base_width = 12
+        width_per_group = 1.2
+        min_width = 10
+        max_width = 30
+        calculated = base_width + (num_groups - 5) * width_per_group
+        return max(min_width, min(max_width, calculated))
+    
+    def plot_nodes_visited(self, output_dir=None):
+        """Graphique des nœuds visités (succès et pas de solution, sans timeout)"""
         if output_dir is None:
             output_dir = self.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        df_success = self.df[self.df['success']]
+        # status: 0=succès, 1=timeout, 2=pas de solution
+        df_success = self.df[self.df['status'] == 0]
+        df_not_found = self.df[(self.df['status'] == 2) & (self.df['nodes_visited'] > 0)]
         
-        if df_success.empty:
+        if df_success.empty and df_not_found.empty:
             return
         
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 7))
+        # Tri par problème puis algorithme
+        all_groups = sorted(
+            self.df.groupby(['problem', 'algorithm']).first().index.tolist(),
+            key=lambda x: (x[0], x[1])
+        )
         
-        # Nœuds visités
-        grouped_visited = df_success.groupby(['algorithm', 'problem'])['nodes_visited'].mean()
-        grouped_visited.plot(kind='bar', ax=ax1, color='steelblue')
-        ax1.set_xlabel('Algorithme - Problème')
-        ax1.set_ylabel('Nombre de Nœuds')
-        ax1.set_title('Nœuds Visités (moyenne)')
-        ax1.tick_params(axis='x', rotation=45)
+        # Largeur dynamique
+        fig_width = self._calculate_figure_width(len(all_groups))
+        fig, ax = plt.subplots(figsize=(fig_width, 8))
         
-        # Nœuds générés
-        grouped_generated = df_success.groupby(['algorithm', 'problem'])['nodes_generated'].mean()
-        grouped_generated.plot(kind='bar', ax=ax2, color='seagreen')
-        ax2.set_xlabel('Algorithme - Problème')
-        ax2.set_ylabel('Nombre de Nœuds')
-        ax2.set_title('Nœuds Générés (moyenne)')
-        ax2.tick_params(axis='x', rotation=45)
+        x = np.arange(len(all_groups))
+        width = 0.35
         
+        # Nœuds visités - Succès
+        success_visited = []
+        for group in all_groups:
+            data = df_success[(df_success['problem'] == group[0]) & (df_success['algorithm'] == group[1])]['nodes_visited']
+            success_visited.append(data.mean() if len(data) > 0 else 0)
+        
+        # Nœuds visités - Pas de solution
+        not_found_visited = []
+        for group in all_groups:
+            data = df_not_found[(df_not_found['problem'] == group[0]) & (df_not_found['algorithm'] == group[1])]['nodes_visited']
+            not_found_visited.append(data.mean() if len(data) > 0 else 0)
+        
+        ax.bar(x - width/2, success_visited, width, label='Succès', color='steelblue')
+        ax.bar(x + width/2, not_found_visited, width, label='Pas de solution', 
+               color='lightcoral', hatch='//', alpha=0.7, edgecolor='darkred')
+        ax.set_xlabel('Problème - Algorithme')
+        ax.set_ylabel('Nombre de Nœuds')
+        ax.set_title('Nœuds Visités (moyenne)')
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{g[0]}\n{g[1]}" for g in all_groups], rotation=45, ha='right')
+        ax.legend()
         plt.tight_layout()
         
-        output_path = f'{output_dir}/nodes_comparison.png'
+        output_path = f'{output_dir}/nodes_visited.png'
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
-        print(f"Nœuds comparés généré: {output_path}")
+        print(f"Nœuds visités généré: {output_path}")
+        plt.close()
+    
+    def plot_nodes_generated(self, output_dir=None):
+        """Graphique des nœuds générés (succès et pas de solution, sans timeout)"""
+        if output_dir is None:
+            output_dir = self.output_dir
+        Path(output_dir).mkdir(parents=True, exist_ok=True)
+        
+        # status: 0=succès, 1=timeout, 2=pas de solution
+        df_success = self.df[self.df['status'] == 0]
+        df_not_found = self.df[(self.df['status'] == 2) & (self.df['nodes_generated'] > 0)]
+        
+        if df_success.empty and df_not_found.empty:
+            return
+        
+        # Tri par problème puis algorithme
+        all_groups = sorted(
+            self.df.groupby(['problem', 'algorithm']).first().index.tolist(),
+            key=lambda x: (x[0], x[1])
+        )
+        
+        # Largeur dynamique
+        fig_width = self._calculate_figure_width(len(all_groups))
+        fig, ax = plt.subplots(figsize=(fig_width, 8))
+        
+        x = np.arange(len(all_groups))
+        width = 0.35
+        
+        # Nœuds générés - Succès
+        success_generated = []
+        for group in all_groups:
+            data = df_success[(df_success['problem'] == group[0]) & (df_success['algorithm'] == group[1])]['nodes_generated']
+            success_generated.append(data.mean() if len(data) > 0 else 0)
+        
+        # Nœuds générés - Pas de solution
+        not_found_generated = []
+        for group in all_groups:
+            data = df_not_found[(df_not_found['problem'] == group[0]) & (df_not_found['algorithm'] == group[1])]['nodes_generated']
+            not_found_generated.append(data.mean() if len(data) > 0 else 0)
+        
+        ax.bar(x - width/2, success_generated, width, label='Succès', color='seagreen')
+        ax.bar(x + width/2, not_found_generated, width, label='Pas de solution',
+               color='lightsalmon', hatch='//', alpha=0.7, edgecolor='darkgreen')
+        ax.set_xlabel('Problème - Algorithme')
+        ax.set_ylabel('Nombre de Nœuds')
+        ax.set_title('Nœuds Générés (moyenne)')
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"{g[0]}\n{g[1]}" for g in all_groups], rotation=45, ha='right')
+        ax.legend()
+        plt.tight_layout()
+        
+        output_path = f'{output_dir}/nodes_generated.png'
+        plt.savefig(output_path, dpi=300, bbox_inches='tight')
+        print(f"Nœuds générés généré: {output_path}")
         plt.close()
     
     def plot_success_rate(self, output_dir=None):
@@ -149,11 +305,19 @@ class BenchmarkVisualizer:
             output_dir = self.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        fig, ax = plt.subplots(figsize=(12, 7))
+        # Tri par problème puis algorithme - calculer le taux de succès (status == 0)
+        success_rate = self.df.groupby(['problem', 'algorithm'], as_index=True).apply(
+            lambda x: (x['status'] == 0).mean() * 100,
+            include_groups=False
+        )
+        success_rate = success_rate.sort_index()
         
-        success_rate = self.df.groupby(['algorithm', 'problem'])['success'].mean() * 100
+        # Largeur dynamique
+        fig_width = self._calculate_figure_width(len(success_rate))
+        fig, ax = plt.subplots(figsize=(fig_width, 7))
+        
         success_rate.plot(kind='bar', ax=ax, color='mediumseagreen')
-        ax.set_xlabel('Algorithme - Problème')
+        ax.set_xlabel('Problème - Algorithme')
         ax.set_ylabel('Taux de Succès (%)')
         ax.set_title('Taux de Succès par Algorithme et Problème')
         ax.axhline(y=100, color='red', linestyle='--', alpha=0.5, label='100%')
@@ -172,7 +336,7 @@ class BenchmarkVisualizer:
             output_dir = self.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        df_success = self.df[self.df['success']]
+        df_success = self.df[self.df['status'] == 0]
         
         if df_success.empty or df_success['problem_size'].nunique() < 2:
             print("Warning: Pas assez de tailles différentes pour le graphique de scalabilité")
@@ -241,7 +405,7 @@ class BenchmarkVisualizer:
             output_dir = self.output_dir
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         
-        df_success = self.df[self.df['success']]
+        df_success = self.df[self.df['status'] == 0]
         
         if df_success.empty:
             return
@@ -271,7 +435,8 @@ class BenchmarkVisualizer:
         print("\nGénération de tous les graphiques...")
         self.plot_time_comparison()
         self.plot_memory_comparison()
-        self.plot_nodes_comparison()
+        self.plot_nodes_visited()
+        self.plot_nodes_generated()
         self.plot_success_rate()
         self.plot_size_scaling()
         self.plot_heatmap_comparison()

@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Metrics {
@@ -8,6 +10,73 @@ pub struct Metrics {
     pub nodes_generated: usize,
     pub max_frontier_size: usize,
     pub solution_length: usize,
+}
+
+/// Métriques partagées pour permettre la récupération en cas de timeout
+#[derive(Clone)]
+pub struct SharedMetrics {
+    inner: Arc<Mutex<Metrics>>,
+    start: Instant,
+}
+
+impl SharedMetrics {
+    pub fn new() -> Self {
+        SharedMetrics {
+            inner: Arc::new(Mutex::new(Metrics::default())),
+            start: Instant::now(),
+        }
+    }
+
+    pub fn update<F>(&self, f: F)
+    where
+        F: FnOnce(&mut Metrics),
+    {
+        if let Ok(mut metrics) = self.inner.lock() {
+            f(&mut metrics);
+            metrics.time_ms = self.start.elapsed().as_millis() as f64;
+        }
+    }
+
+    pub fn get(&self) -> Metrics {
+        self.inner.lock().map(|m| m.clone()).unwrap_or_default()
+    }
+
+    pub fn increment_visited(&self) {
+        if let Ok(mut metrics) = self.inner.lock() {
+            metrics.nodes_visited += 1;
+            metrics.time_ms = self.start.elapsed().as_millis() as f64;
+        }
+    }
+
+    pub fn increment_generated(&self) {
+        if let Ok(mut metrics) = self.inner.lock() {
+            metrics.nodes_generated += 1;
+        }
+    }
+
+    pub fn update_max_frontier(&self, size: usize) {
+        if let Ok(mut metrics) = self.inner.lock() {
+            metrics.max_frontier_size = metrics.max_frontier_size.max(size);
+        }
+    }
+
+    pub fn set_memory_kb(&self, kb: usize) {
+        if let Ok(mut metrics) = self.inner.lock() {
+            metrics.memory_kb = kb;
+        }
+    }
+
+    pub fn set_solution_length(&self, len: usize) {
+        if let Ok(mut metrics) = self.inner.lock() {
+            metrics.solution_length = len;
+        }
+    }
+}
+
+impl Default for SharedMetrics {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Metrics {
@@ -38,7 +107,8 @@ pub struct BenchmarkResult {
     pub problem: String,
     pub problem_size: usize,
     pub instance_id: usize,
-    pub success: bool,
+    /// 0 = succès, 1 = timeout, 2 = pas de solution trouvée
+    pub status: u8,
     pub metrics: Metrics,
     pub timestamp: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -65,9 +135,9 @@ pub struct AggregatedResults {
 impl AggregatedResults {
     pub fn from_results(results: &[BenchmarkResult]) -> Self {
         let total = results.len();
-        let successful = results.iter().filter(|r| r.success).count();
+        let successful = results.iter().filter(|r| r.status == 0).count();
 
-        let successful_results: Vec<_> = results.iter().filter(|r| r.success).collect();
+        let successful_results: Vec<_> = results.iter().filter(|r| r.status == 0).collect();
 
         if successful_results.is_empty() {
             return AggregatedResults {

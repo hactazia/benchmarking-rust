@@ -35,12 +35,18 @@ class ReportGenerator:
         
         data = []
         for result in results:
+            # Support ancien format (success: bool) et nouveau format (status: int)
+            if 'status' in result:
+                status = result['status']
+            else:
+                status = 0 if result.get('success', False) else 2
+            
             row = {
                 'algorithm': result['algorithm'],
                 'problem': result['problem'],
                 'problem_size': result['problem_size'],
                 'instance_id': result['instance_id'],
-                'success': result['success'],
+                'status': status,  # 0=succès, 1=timeout, 2=pas de solution
                 'time_ms': result['metrics']['time_ms'],
                 'memory_kb': result['metrics']['memory_kb'],
                 'nodes_visited': result['metrics']['nodes_visited'],
@@ -53,16 +59,23 @@ class ReportGenerator:
         self.df = pd.DataFrame(data)
     
     def generate_summary_statistics(self):
-        """Génère les statistiques résumées"""
-        df_success = self.df[self.df['success']]
+        """Génère les statistiques résumées (succès, timeout, pas de solution), triées par problème puis algorithme"""
+        # status: 0=succès, 1=timeout, 2=pas de solution
+        df_success = self.df[self.df['status'] == 0]
+        df_timeout = self.df[(self.df['status'] == 1) & (self.df['nodes_visited'] > 0)]
+        df_not_found = self.df[(self.df['status'] == 2) & (self.df['nodes_visited'] > 0)]
         
         summary = []
-        for (algo, problem), group in df_success.groupby(['algorithm', 'problem']):
+        
+        # Statistiques des succès (groupé par problème puis algorithme)
+        for (problem, algo), group in df_success.groupby(['problem', 'algorithm']):
+            total = len(self.df[(self.df['algorithm'] == algo) & (self.df['problem'] == problem)])
             stats = {
-                'Algorithme': algo,
                 'Problème': problem,
-                'Succès': f"{len(group)}/{len(self.df[(self.df['algorithm'] == algo) & (self.df['problem'] == problem)])}",
-                'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}",
+                'Algorithme': algo,
+                'Statut': '✅ Succès',
+                'Nb': f"{len(group)}/{total}",
+                'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}" if len(group) > 1 else f"{group['time_ms'].mean():.2f}",
                 'Mémoire (Ko)': f"{group['memory_kb'].mean():.0f}",
                 'Nœuds Visités': f"{group['nodes_visited'].mean():.0f}",
                 'Nœuds Générés': f"{group['nodes_generated'].mean():.0f}",
@@ -70,11 +83,47 @@ class ReportGenerator:
             }
             summary.append(stats)
         
-        return pd.DataFrame(summary)
+        # Statistiques des timeouts (groupé par problème puis algorithme)
+        for (problem, algo), group in df_timeout.groupby(['problem', 'algorithm']):
+            total = len(self.df[(self.df['algorithm'] == algo) & (self.df['problem'] == problem)])
+            stats = {
+                'Problème': problem,
+                'Algorithme': algo,
+                'Statut': '⏱️ Timeout',
+                'Nb': f"{len(group)}/{total}",
+                'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}" if len(group) > 1 else f"{group['time_ms'].mean():.2f}",
+                'Mémoire (Ko)': f"{group['memory_kb'].mean():.0f}" if group['memory_kb'].mean() > 0 else "—",
+                'Nœuds Visités': f"{group['nodes_visited'].mean():.0f}",
+                'Nœuds Générés': f"{group['nodes_generated'].mean():.0f}",
+                'Longueur Sol.': "—",
+            }
+            summary.append(stats)
+        
+        # Statistiques des "pas de solution" (groupé par problème puis algorithme)
+        for (problem, algo), group in df_not_found.groupby(['problem', 'algorithm']):
+            total = len(self.df[(self.df['algorithm'] == algo) & (self.df['problem'] == problem)])
+            stats = {
+                'Problème': problem,
+                'Algorithme': algo,
+                'Statut': '❌ Pas trouvé',
+                'Nb': f"{len(group)}/{total}",
+                'Temps (ms)': f"{group['time_ms'].mean():.2f} ± {group['time_ms'].std():.2f}" if len(group) > 1 else f"{group['time_ms'].mean():.2f}",
+                'Mémoire (Ko)': f"{group['memory_kb'].mean():.0f}" if group['memory_kb'].mean() > 0 else "—",
+                'Nœuds Visités': f"{group['nodes_visited'].mean():.0f}",
+                'Nœuds Générés': f"{group['nodes_generated'].mean():.0f}",
+                'Longueur Sol.': "—",
+            }
+            summary.append(stats)
+        
+        # Trier par problème puis algorithme
+        summary_df = pd.DataFrame(summary)
+        if not summary_df.empty:
+            summary_df = summary_df.sort_values(['Problème', 'Algorithme'])
+        return summary_df
     
     def analyze_algorithm_strengths(self):
         """Analyse les points forts de chaque algorithme"""
-        df_success = self.df[self.df['success']]
+        df_success = self.df[self.df['status'] == 0]
         
         analyses = []
         
@@ -121,7 +170,8 @@ class ReportGenerator:
             # Résumé des données
             f.write("## Vue d'Ensemble\n\n")
             f.write(f"- **Nombre total de tests:** {len(self.df)}\n")
-            f.write(f"- **Tests réussis:** {self.df['success'].sum()} ({self.df['success'].mean()*100:.1f}%)\n")
+            success_count = (self.df['status'] == 0).sum()
+            f.write(f"- **Tests réussis:** {success_count} ({success_count/len(self.df)*100:.1f}%)\n")
             f.write(f"- **Algorithmes testés:** {self.df['algorithm'].nunique()}\n")
             f.write(f"- **Problèmes testés:** {self.df['problem'].nunique()}\n\n")
             
@@ -141,7 +191,8 @@ class ReportGenerator:
             f.write("## Visualisations\n\n")
             f.write(f"![Temps d'exécution](../../visuals/{self.base_name}/time_comparison.png)\n\n")
             f.write(f"![Utilisation mémoire](../../visuals/{self.base_name}/memory_comparison.png)\n\n")
-            f.write(f"![Nœuds explorés](../../visuals/{self.base_name}/nodes_comparison.png)\n\n")
+            f.write(f"![Nœuds visités](../../visuals/{self.base_name}/nodes_visited.png)\n\n")
+            f.write(f"![Nœuds générés](../../visuals/{self.base_name}/nodes_generated.png)\n\n")
             f.write(f"![Taux de succès](../../visuals/{self.base_name}/success_rate.png)\n\n")
             
             f.write("\n---\n\n")
@@ -155,10 +206,10 @@ class ReportGenerator:
             output_file = self.details_file
         Path(output_file).parent.mkdir(parents=True, exist_ok=True)
         
-        # Trier les résultats par problème, algorithme, et succès
+        # Trier les résultats par problème, algorithme, et status (0=succès en premier)
         sorted_results = sorted(
             self.results_raw,
-            key=lambda x: (x['problem'], x['algorithm'], not x['success'], x['instance_id'])
+            key=lambda x: (x['problem'], x['algorithm'], x.get('status', 0 if x.get('success', False) else 2), x['instance_id'])
         )
         
         with open(output_file, 'w', encoding='utf-8') as f:
@@ -190,21 +241,22 @@ class ReportGenerator:
                     # Statistiques pour cet algorithme sur ce problème
                     algo_results = [r for r in sorted_results 
                                    if r['problem'] == problem and r['algorithm'] == algorithm]
-                    success_count = sum(1 for r in algo_results if r['success'])
+                    success_count = sum(1 for r in algo_results if r.get('status', 0 if r.get('success', False) else 2) == 0)
                     total_count = len(algo_results)
                     f.write(f"**Taux de succès:** {success_count}/{total_count} ({success_count/total_count*100:.1f}%)\n\n")
                 
                 # Détails de l'instance
                 instance_id = result['instance_id']
-                success = result['success']
+                status = result.get('status', 0 if result.get('success', False) else 2)
                 metrics = result['metrics']
                 error = result.get('error', None)
                 initial_state = result.get('initial_state', None)
                 
-                status_emoji = "✅" if success else "❌"
+                # 0=succès, 1=timeout, 2=pas de solution
+                status_emoji = "✅" if status == 0 else ("⏱️" if status == 1 else "❌")
                 f.write(f"#### {status_emoji} Instance #{instance_id}\n\n")
                 
-                if success:
+                if status == 0:
                     f.write("| Métrique | Valeur |\n")
                     f.write("|----------|--------|\n")
                     f.write(f"| **Temps** | {metrics['time_ms']:.2f} ms |\n")
@@ -215,10 +267,23 @@ class ReportGenerator:
                     f.write(f"| **Taille frontière max** | {metrics['max_frontier_size']:,} |\n")
                 else:
                     f.write(f"**Erreur:** {error if error else 'Pas de solution trouvée'}\n\n")
-                    f.write("| Métrique | Valeur |\n")
-                    f.write("|----------|--------|\n")
-                    f.write(f"| **Temps écoulé** | {metrics['time_ms']:.2f} ms |\n")
-                    f.write(f"| **Nœuds visités** | {metrics['nodes_visited']:,} |\n")
+                    # Afficher les métriques partielles si disponibles
+                    if metrics['nodes_visited'] > 0:
+                        f.write("**Métriques partielles (avant échec/timeout):**\n\n")
+                        f.write("| Métrique | Valeur |\n")
+                        f.write("|----------|--------|\n")
+                        f.write(f"| **Temps écoulé** | {metrics['time_ms']:.2f} ms |\n")
+                        if metrics['memory_kb'] > 0:
+                            f.write(f"| **Mémoire** | {metrics['memory_kb']:,} Ko |\n")
+                        f.write(f"| **Nœuds visités** | {metrics['nodes_visited']:,} |\n")
+                        f.write(f"| **Nœuds générés** | {metrics['nodes_generated']:,} |\n")
+                        if metrics.get('max_frontier_size', 0) > 0:
+                            f.write(f"| **Taille frontière max** | {metrics['max_frontier_size']:,} |\n")
+                    else:
+                        f.write("| Métrique | Valeur |\n")
+                        f.write("|----------|--------|\n")
+                        f.write(f"| **Temps écoulé** | {metrics['time_ms']:.2f} ms |\n")
+                        f.write(f"| **Nœuds visités** | {metrics['nodes_visited']:,} |\n")
                 
                 if initial_state:
                     f.write("\n<details>\n")
@@ -234,12 +299,12 @@ class ReportGenerator:
         
         print(f"Rapport détaillé généré: {output_file}")
     
-    def get_combined_markdown(self, include_details=False, analyses_file=None):
+    def get_combined_markdown(self, include_details=False, presentation_file=None):
         """Retourne le contenu markdown combiné pour l'export PDF
         
         Args:
             include_details: Si True, inclut les détails des instances à la fin
-            analyses_file: Chemin vers le fichier analyses.md à inclure
+            presentation_file: Chemin vers le fichier presentation.md à inclure
         """
         # Générer le contenu du rapport principal en mémoire
         content = []
@@ -269,15 +334,15 @@ class ReportGenerator:
         
         # Table des matières (générée par pandoc avec --toc)
         
-        # Section Analyse (depuis analyses.md)
-        if analyses_file:
-            analyses_path = Path(analyses_file)
-            if analyses_path.exists():
-                with open(analyses_path, 'r', encoding='utf-8') as f:
-                    analyses_content = f.read().strip()
-                if analyses_content:
+        # Section Présentation (depuis presentation.md)
+        if presentation_file:
+            presentation_path = Path(presentation_file)
+            if presentation_path.exists():
+                with open(presentation_path, 'r', encoding='utf-8') as f:
+                    presentation_content = f.read().strip()
+                if presentation_content:
                     content.append("\n\\newpage\n")
-                    content.append(analyses_content)
+                    content.append(presentation_content)
                     content.append("\n")
         
         # En-tête du rapport
@@ -290,7 +355,8 @@ class ReportGenerator:
         # Résumé des données
         content.append("\n## Vue d'Ensemble\n")
         content.append(f"- **Nombre total de tests:** {len(self.df)}\n")
-        content.append(f"- **Tests réussis:** {self.df['success'].sum()} ({self.df['success'].mean()*100:.1f}%)\n")
+        success_count = (self.df['status'] == 0).sum()
+        content.append(f"- **Tests réussis:** {success_count} ({success_count/len(self.df)*100:.1f}%)\n")
         content.append(f"- **Algorithmes testés:** {self.df['algorithm'].nunique()}\n")
         content.append(f"- **Problèmes testés:** {self.df['problem'].nunique()}\n")
         
@@ -314,7 +380,8 @@ class ReportGenerator:
         graphics = [
             ("time_comparison.png", "Comparaison des Temps d'Exécution"),
             ("memory_comparison.png", "Comparaison de l'Utilisation Mémoire"),
-            ("nodes_comparison.png", "Comparaison des Nœuds Visités"),
+            ("nodes_visited.png", "Comparaison des Nœuds Visités"),
+            ("nodes_generated.png", "Comparaison des Nœuds Générés"),
             ("success_rate.png", "Taux de Succès par Algorithme"),
             ("heatmap_time.png", "Heatmap des Temps d'Exécution"),
             ("size_scaling.png", "Évolution selon la Taille du Problème"),
@@ -338,7 +405,7 @@ class ReportGenerator:
             # Trier les résultats
             sorted_results = sorted(
                 self.results_raw,
-                key=lambda x: (x['problem'], x['algorithm'], not x['success'], x['instance_id'])
+                key=lambda x: (x['problem'], x['algorithm'], x.get('status', 0 if x.get('success', False) else 2), x['instance_id'])
             )
             
             current_problem = None
@@ -359,19 +426,19 @@ class ReportGenerator:
                     
                     algo_results = [r for r in sorted_results 
                                    if r['problem'] == problem and r['algorithm'] == algorithm]
-                    success_count = sum(1 for r in algo_results if r['success'])
+                    success_count = sum(1 for r in algo_results if r.get('status', 0 if r.get('success', False) else 2) == 0)
                     total_count = len(algo_results)
                     content.append(f"**Taux de succès:** {success_count}/{total_count} ({success_count/total_count*100:.1f}%)\n")
                 
                 instance_id = result['instance_id']
-                success = result['success']
+                status = result.get('status', 0 if result.get('success', False) else 2)
                 metrics = result['metrics']
                 error = result.get('error', None)
                 
-                status = "[OK]" if success else "[ECHEC]"
-                content.append(f"\n#### {status} Instance #{instance_id}\n")
+                status_text = "[OK]" if status == 0 else ("[TIMEOUT]" if status == 1 else "[ECHEC]")
+                content.append(f"\n#### {status_text} Instance #{instance_id}\n")
                 
-                if success:
+                if status == 0:
                     content.append("| Métrique | Valeur |\n")
                     content.append("|----------|--------|\n")
                     content.append(f"| Temps | {metrics['time_ms']:.2f} ms |\n")
@@ -379,7 +446,15 @@ class ReportGenerator:
                     content.append(f"| Nœuds visités | {metrics['nodes_visited']:,} |\n")
                     content.append(f"| Longueur solution | {metrics['solution_length']} |\n")
                 else:
-                    content.append(f"**Erreur:** {error if error else 'Pas de solution trouvée'}\n")
+                    content.append(f"**Erreur:** {error if error else 'Pas de solution trouvée'}\n\n")
+                    # Afficher les métriques partielles si disponibles
+                    if metrics['nodes_visited'] > 0:
+                        content.append("**Métriques partielles:**\n\n")
+                        content.append("| Métrique | Valeur |\n")
+                        content.append("|----------|--------|\n")
+                        content.append(f"| Temps écoulé | {metrics['time_ms']:.2f} ms |\n")
+                        content.append(f"| Nœuds visités | {metrics['nodes_visited']:,} |\n")
+                        content.append(f"| Nœuds générés | {metrics['nodes_generated']:,} |\n")
         
         return "".join(content)
     
@@ -393,7 +468,8 @@ class ReportGenerator:
         
         # Vue d'ensemble
         content.append(f"\n**Nombre total de tests:** {len(self.df)}\n")
-        content.append(f"**Tests réussis:** {self.df['success'].sum()} ({self.df['success'].mean()*100:.1f}%)\n")
+        success_count = (self.df['status'] == 0).sum()
+        content.append(f"**Tests réussis:** {success_count} ({success_count/len(self.df)*100:.1f}%)\n")
         content.append(f"**Algorithmes testés:** {self.df['algorithm'].nunique()}\n")
         content.append(f"**Problèmes testés:** {self.df['problem'].nunique()}\n")
         
@@ -413,7 +489,8 @@ class ReportGenerator:
         graphics = [
             ("time_comparison.png", "Temps d'Exécution"),
             ("memory_comparison.png", "Utilisation Mémoire"),
-            ("nodes_comparison.png", "Nœuds Visités"),
+            ("nodes_visited.png", "Nœuds Visités"),
+            ("nodes_generated.png", "Nœuds Générés"),
             ("success_rate.png", "Taux de Succès"),
         ]
         
@@ -431,7 +508,7 @@ class ReportGenerator:
             
             sorted_results = sorted(
                 self.results_raw,
-                key=lambda x: (x['problem'], x['algorithm'], not x['success'], x['instance_id'])
+                key=lambda x: (x['problem'], x['algorithm'], x.get('status', 0 if x.get('success', False) else 2), x['instance_id'])
             )
             
             current_problem = None
@@ -450,7 +527,7 @@ class ReportGenerator:
                     current_algorithm = algorithm
                     algo_results = [r for r in sorted_results 
                                    if r['problem'] == problem and r['algorithm'] == algorithm]
-                    success_count = sum(1 for r in algo_results if r['success'])
+                    success_count = sum(1 for r in algo_results if r.get('status', 0 if r.get('success', False) else 2) == 0)
                     total_count = len(algo_results)
                     content.append(f"\n**{algorithm}:** {success_count}/{total_count} succès\n")
         

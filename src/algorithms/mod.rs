@@ -4,10 +4,19 @@ pub mod dfs;
 pub mod idastar;
 pub mod iterative_deepening;
 
-use crate::benchmarking::Metrics;
+use crate::benchmarking::{Metrics, SharedMetrics};
 
 pub trait SearchAlgorithm {
     fn search<P: Problem>(&self, problem: &P) -> SearchResult;
+    
+    /// Recherche avec métriques partagées (permet de récupérer les métriques en cas de timeout)
+    fn search_with_shared_metrics<P: Problem>(&self, problem: &P, shared: SharedMetrics) -> SearchResult {
+        // Par défaut, on fait une recherche normale et on copie les métriques
+        let result = self.search(problem);
+        shared.update(|m| *m = result.metrics.clone());
+        result
+    }
+    
     fn name(&self) -> &str;
 }
 
@@ -15,7 +24,8 @@ pub trait SearchAlgorithm {
 pub struct SearchResult {
     pub solution: Option<Vec<usize>>,
     pub metrics: Metrics,
-    pub success: bool,
+    /// 0 = succès, 1 = timeout, 2 = pas de solution trouvée
+    pub status: u8,
 }
 
 pub trait Problem: Clone {

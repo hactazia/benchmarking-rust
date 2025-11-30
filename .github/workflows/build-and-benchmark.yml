@@ -133,7 +133,7 @@ jobs:
         sudo apt-get install -y pandoc texlive-xetex texlive-fonts-recommended texlive-latex-extra
 
     - name: Generate PDF report
-      run: python analysis/generate_pdf.py results/ -o results/rapport.pdf --analyses analyses.md
+      run: python analysis/generate_pdf.py results/ -o results/rapport.pdf --presentation presentation.md
 
     - name: Create archive
       run: cd results && zip -r ../benchmarking-results.zip .

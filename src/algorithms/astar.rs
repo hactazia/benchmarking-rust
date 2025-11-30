@@ -1,5 +1,5 @@
 use super::{Node, Problem, SearchAlgorithm, SearchResult};
-use crate::benchmarking::Metrics;
+use crate::benchmarking::{Metrics, SharedMetrics};
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap};
 use std::time::Instant;
@@ -67,7 +67,7 @@ impl SearchAlgorithm for AStar {
                 return SearchResult {
                     solution: Some(solution),
                     metrics,
-                    success: true,
+                    status: 0, // Succès
                 };
             }
 
@@ -107,7 +107,82 @@ impl SearchAlgorithm for AStar {
         SearchResult {
             solution: None,
             metrics,
-            success: false,
+            status: 2, // Pas de solution
+        }
+    }
+
+    fn search_with_shared_metrics<P: Problem>(&self, problem: &P, shared: SharedMetrics) -> SearchResult {
+        let initial_state = problem.initial_state();
+        let initial_h = problem.heuristic(&initial_state);
+        let initial_node = Node::new(initial_state.clone());
+
+        let mut frontier = BinaryHeap::new();
+        frontier.push(AStarNode {
+            node: initial_node,
+            f_score: initial_h,
+        });
+
+        let mut explored = HashMap::new();
+        let mut g_scores = HashMap::new();
+        g_scores.insert(initial_state, 0);
+
+        shared.update(|m| m.nodes_generated = 1);
+
+        while let Some(astar_node) = frontier.pop() {
+            let node = astar_node.node;
+            shared.increment_visited();
+
+            if problem.is_goal(&node.state) {
+                let solution = node.extract_solution();
+                shared.set_solution_length(solution.len());
+                shared.set_memory_kb(
+                    (explored.len() + frontier.len()) * std::mem::size_of::<P::State>() / 1024,
+                );
+
+                return SearchResult {
+                    solution: Some(solution),
+                    metrics: shared.get(),
+                    status: 0, // Succès
+                };
+            }
+
+            if explored.contains_key(&node.state) {
+                continue;
+            }
+
+            explored.insert(node.state.clone(), node.path_cost);
+
+            for (successor_state, cost) in problem.successors(&node.state) {
+                let tentative_g = node.path_cost + cost;
+
+                if let Some(&existing_g) = g_scores.get(&successor_state) {
+                    if tentative_g >= existing_g {
+                        continue;
+                    }
+                }
+
+                g_scores.insert(successor_state.clone(), tentative_g);
+                let h = problem.heuristic(&successor_state);
+                let f = tentative_g + h;
+
+                let generated = shared.get().nodes_generated;
+                let child = node.child(successor_state, generated, cost);
+                frontier.push(AStarNode {
+                    node: child,
+                    f_score: f,
+                });
+                shared.increment_generated();
+            }
+
+            shared.update_max_frontier(frontier.len());
+        }
+
+        shared.set_memory_kb(explored.len() * std::mem::size_of::<P::State>() / 1024);
+
+        SearchResult {
+            solution: None,
+            metrics: shared.get(),
+            status: 2, // Pas de solution
         }
     }
 

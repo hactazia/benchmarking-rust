@@ -2,14 +2,14 @@
 
 Projet d'évaluation et comparaison des performances d'algorithmes de recherche (BFS, DFS, ID, A*, IDA*) sur différents problèmes types.
 
-## 🎯 Objectifs
+## Objectifs
 
 - Implémenter plusieurs algorithmes de recherche en Rust
 - Tester sur différents problèmes (Taquin, plus court chemin, etc.)
 - Analyser les performances (temps, mémoire, nœuds visités)
 - Visualiser et comparer les résultats avec Python
 
-## 📊 Algorithmes Implémentés
+## Algorithmes Implémentés
 
 - **BFS** (Breadth-First Search)
 - **DFS** (Depth-First Search)
@@ -17,7 +17,7 @@ Projet d'évaluation et comparaison des performances d'algorithmes de recherche 
 - **A\*** (A-Star)
 - **IDA\*** (Iterative Deepening A-Star)
 
-## 🧩 Problèmes Types
+## Problèmes Types
 
 1. **Taquin** (Sliding Puzzle)
    - Tailles: 3x3, 4x4
@@ -30,7 +30,7 @@ Projet d'évaluation et comparaison des performances d'algorithmes de recherche 
    - Tests de scalabilité
    - Tous les algorithmes supportés (BFS, DFS, ID, A*, IDA*)
 
-## 🚀 Installation et Utilisation
+## Installation et Utilisation
 
 ### Prérequis
 
@@ -42,13 +42,10 @@ Projet d'évaluation et comparaison des performances d'algorithmes de recherche 
 #### Option 1 : Télécharger les binaires pré-compilés
 
 Téléchargez les exécutables et résultats depuis les [Releases GitHub](https://github.com/hactazia/benchmarking-rust/releases) :
-- `benchmarking-rust-windows-x64.zip` - Windows 64-bit
-- `benchmarking-rust-linux-x64.zip` - Linux 64-bit
-
-Chaque archive contient :
-- L'exécutable compilé (`results/bin/`)
-- Les résultats JSON des benchmarks
-- Tous les graphiques et rapports générés
+- `benchmarking.exe` - Executable Windows 64-bit
+- `benchmarking` - Executable Linux 64-bit
+- `benchmarking-results.zip` - Résultats des benchmarks
+- `rapport.pdf` - Rapport complet en PDF
 
 #### Option 2 : Compiler depuis les sources
 
@@ -92,7 +89,7 @@ python analysis/visualize.py results/file.json
 python analysis/generate_report.py results/file.json
 ```
 
-## 📈 Métriques Mesurées
+## Métriques Mesurées
 
 - **Temps de calcul** (ms)
 - **Mémoire utilisée** (Ko/Mo)
@@ -102,7 +99,7 @@ python analysis/generate_report.py results/file.json
 - **Facteur de branchement effectif**
 - **État initial** du problème (capturé dans JSON)
 
-## 📁 Structure du Projet
+## Structure du Projet
 
 ```
 benchmarking-rust/
@@ -137,7 +134,8 @@ benchmarking-rust/
 │   │   └── <name>/             # Dossier par fichier JSON
 │   │       ├── time_comparison.png
 │   │       ├── memory_comparison.png
-│   │       ├── nodes_comparison.png
+│   │       ├── nodes_visited.png
+│   │       ├── nodes_generated.png
 │   │       └── success_rate.png
 │   └── reports/                # Rapports markdown
 │       └── <name>/             # Dossier par fichier JSON
@@ -145,13 +143,14 @@ benchmarking-rust/
 │           └── details.md      # Détails par instance
 ├── docs/                       # Documentation
 ├── README.md                   # Documentation principale
+├── presentation.md             # Présentation du projet
 ├── start.ps1                   # Script PowerShell pour benchmarks
 ├── start.sh                    # Script Bash pour benchmarks
 ├── Cargo.toml                  # Configuration du projet Rust
 └── requirements.txt            # Dépendances Python
 ```
 
-## 🔬 Résultats Générés
+## Résultats Générés
 
 Les benchmarks génèrent plusieurs types de fichiers:
 

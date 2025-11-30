@@ -84,7 +84,7 @@ def generate_pdf_from_markdown(markdown_content, output_path):
         os.unlink(tmp_path)
 
 
-def generate_single_pdf(json_file, output_path=None, include_details=False, analyses_file=None):
+def generate_single_pdf(json_file, output_path=None, include_details=False, presentation_file=None):
     """
     Génère un PDF à partir d'un seul fichier JSON.
     
@@ -92,7 +92,7 @@ def generate_single_pdf(json_file, output_path=None, include_details=False, anal
         json_file: Chemin vers le fichier JSON
         output_path: Chemin du fichier PDF de sortie (optionnel)
         include_details: Inclure les détails des instances à la fin
-        analyses_file: Chemin vers le fichier analyses.md à inclure
+        presentation_file: Chemin vers le fichier presentation.md à inclure
     
     Returns:
         True si succès, False sinon
@@ -109,7 +109,7 @@ def generate_single_pdf(json_file, output_path=None, include_details=False, anal
         generator = ReportGenerator(str(json_file))
         markdown_content = generator.get_combined_markdown(
             include_details=include_details,
-            analyses_file=analyses_file
+            presentation_file=presentation_file
         )
         
         if generate_pdf_from_markdown(markdown_content, output_path):
@@ -122,7 +122,7 @@ def generate_single_pdf(json_file, output_path=None, include_details=False, anal
         return False
 
 
-def generate_combined_pdf(json_files, output_path, include_details=False, analyses_file=None):
+def generate_combined_pdf(json_files, output_path, include_details=False, presentation_file=None):
     """
     Génère un PDF combiné à partir de plusieurs fichiers JSON.
     
@@ -130,7 +130,7 @@ def generate_combined_pdf(json_files, output_path, include_details=False, analys
         json_files: Liste de chemins vers les fichiers JSON
         output_path: Chemin du fichier PDF de sortie
         include_details: Inclure les détails des instances à la fin
-        analyses_file: Chemin vers le fichier analyses.md à inclure
+        presentation_file: Chemin vers le fichier presentation.md à inclure
     
     Returns:
         True si succès, False sinon
@@ -169,15 +169,15 @@ def generate_combined_pdf(json_files, output_path, include_details=False, analys
     all_content.append("\\newpage\n")
     all_content.append("\n")
     
-    # Section Analyse (depuis analyses.md)
-    if analyses_file:
-        analyses_path = Path(analyses_file)
-        if analyses_path.exists():
-            with open(analyses_path, 'r', encoding='utf-8') as f:
-                analyses_content = f.read().strip()
-            if analyses_content:
+    # Section Analyse (depuis presentation.md)
+    if presentation_file:
+        presentation_path = Path(presentation_file)
+        if presentation_path.exists():
+            with open(presentation_path, 'r', encoding='utf-8') as f:
+                presentation_content = f.read().strip()
+            if presentation_content:
                 all_content.append("\n\\newpage\n")
-                all_content.append(analyses_content)
+                all_content.append(presentation_content)
                 all_content.append("\n")
     
     # Résultats
@@ -279,8 +279,8 @@ def main():
                         help='Traiter les fichiers comme du markdown au lieu de JSON')
     parser.add_argument('--details', '-d', action='store_true',
                         help='Inclure les détails des instances à la fin du PDF')
-    parser.add_argument('--analyses', '-a', default=None,
-                        help='Chemin vers le fichier analyses.md à inclure après la table des matières')
+    parser.add_argument('--presentation', '-a', default=None,
+                        help='Chemin vers le fichier presentation.md à inclure après la table des matières')
     
     args = parser.parse_args()
     
@@ -327,11 +327,11 @@ def main():
     elif len(files) == 1:
         success = generate_single_pdf(files[0], output_path, 
                                       include_details=args.details,
-                                      analyses_file=args.analyses)
+                                      presentation_file=args.presentation)
     else:
         success = generate_combined_pdf(files, output_path, 
                                         include_details=args.details,
-                                        analyses_file=args.analyses)
+                                        presentation_file=args.presentation)
     
     sys.exit(0 if success else 1)
 

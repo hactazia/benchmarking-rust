@@ -1,5 +1,5 @@
 use super::{Node, Problem, SearchAlgorithm, SearchResult};
-use crate::benchmarking::Metrics;
+use crate::benchmarking::{Metrics, SharedMetrics};
 use std::collections::HashSet;
 use std::time::Instant;
 
@@ -60,6 +60,56 @@ impl IDAStar {
         explored.remove(&node.state);
         (None, min_bound)
     }
+
+    fn search_recursive_shared<P: Problem>(
+        &self,
+        problem: &P,
+        node: &Node<P::State>,
+        bound: usize,
+        explored: &mut HashSet<P::State>,
+        shared: &SharedMetrics,
+    ) -> (Option<Vec<usize>>, usize) {
+        shared.increment_visited();
+
+        let f = node.path_cost + problem.heuristic(&node.state);
+
+        if f > bound {
+            return (None, f);
+        }
+
+        if problem.is_goal(&node.state) {
+            return (Some(node.extract_solution()), 0);
+        }
+
+        explored.insert(node.state.clone());
+
+        let mut min_bound = usize::MAX;
+
+        for (successor_state, cost) in problem.successors(&node.state) {
+            if explored.contains(&successor_state) {
+                continue;
+            }
+
+            let generated = shared.get().nodes_generated;
+            let child = node.child(successor_state, generated, cost);
+            shared.increment_generated();
+
+            let (result, new_bound) =
+                self.search_recursive_shared(problem, &child, bound, explored, shared);
+
+            if result.is_some() {
+                explored.remove(&node.state);
+                return (result, 0);
+            }
+
+            if new_bound < min_bound {
+                min_bound = new_bound;
+            }
+        }
+
+        explored.remove(&node.state);
+        (None, min_bound)
+    }
 }
 
 impl SearchAlgorithm for IDAStar {
@@ -86,7 +136,7 @@ impl SearchAlgorithm for IDAStar {
                 return SearchResult {
                     solution: Some(solution),
                     metrics,
-                    success: true,
+                    status: 0, // Succès
                 };
             }
 
@@ -102,7 +152,44 @@ impl SearchAlgorithm for IDAStar {
         SearchResult {
             solution: None,
             metrics,
-            success: false,
+            status: 2, // Pas de solution
+        }
+    }
+
+    fn search_with_shared_metrics<P: Problem>(&self, problem: &P, shared: SharedMetrics) -> SearchResult {
+        let initial_state = problem.initial_state();
+        let mut bound = problem.heuristic(&initial_state);
+        let initial_node = Node::new(initial_state);
+
+        shared.update(|m| m.nodes_generated = 1);
+
+        loop {
+            let mut explored = HashSet::new();
+            let (result, new_bound) =
+                self.search_recursive_shared(problem, &initial_node, bound, &mut explored, &shared);
+
+            if let Some(solution) = result {
+                shared.set_solution_length(solution.len());
+                shared.set_memory_kb(explored.len() * std::mem::size_of::<P::State>() / 1024);
+
+                return SearchResult {
+                    solution: Some(solution),
+                    metrics: shared.get(),
+                    status: 0, // Succès
+                };
+            }
+
+            if new_bound == usize::MAX || bound >= self.max_bound {
+                break;
+            }
+
+            bound = new_bound;
+        }
+
+        SearchResult {
+            solution: None,
+            metrics: shared.get(),
+            status: 2, // Pas de solution
         }
     }
 

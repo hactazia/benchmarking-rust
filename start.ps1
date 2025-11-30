@@ -86,3 +86,9 @@ Write-Host ""
 Write-Host "Generation des rapports..." -ForegroundColor Cyan
 
 python analysis/generate_report.py results/
+
+Write-Host ""
+
+Write-Host "Generation du PDF..." -ForegroundColor Cyan
+
+python analysis/generate_pdf.py results/ --presentation presentation.md

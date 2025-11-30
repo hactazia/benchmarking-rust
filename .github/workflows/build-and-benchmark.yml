@@ -148,6 +148,8 @@ jobs:
     needs: benchmark
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    permissions:
+      contents: write
     
     steps:
     - name: Download all artifacts
@@ -165,7 +167,8 @@ jobs:
         draft: false
         prerelease: false
         files: |
-          windows-latest-benchmark-results/*.zip
-          ubuntu-latest-benchmark-results/*.zip
+          benchmark-results/benchmarking-results.zip
+          windows-latest-binary/*
+          ubuntu-latest-binary/*
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
